@@ -123,7 +123,8 @@ function hostHandle(conn, msg) {
       (O.active < 0 && allDone(O) && (O.players || []).includes(pid)));
     if (ok) { S.names = O.names; hostAccept(S); }
     else send(conn, {t: 'state', S: G.S, force: true, err: 'That move crossed with another one, so the board was refreshed. Try again.'});
-  } else if (msg.t === 'secret' && G.S) hostSecret(pid, String(msg.inv), String(msg.hash || ''));
+  } else if (msg.t === 'pz') { G.net.conns.forEach((c, p) => { if (p !== pid) send(c, msg); }); pzShow(msg.p); }
+  else if (msg.t === 'secret' && G.S) hostSecret(pid, String(msg.inv), String(msg.hash || ''));
   else if (msg.t === 'reveal' && G.S) hostReveal(pid, String(msg.inv), String(msg.card || ''), String(msg.salt || ''));
 }
 function hostAccept(S) { saveHost(S); onState(S, true); broadcast({t: 'state', S}); }
@@ -189,6 +190,7 @@ function clientHandle(msg) {
   if (!msg || typeof msg !== 'object') return;
   if (msg.t === 'lobby' && msg.L) { G.lobby = msg.L; G.seats = msg.L.seats || []; if (!G.S) { G.screen = 'lobby'; render(); } }
   else if (msg.t === 'state' && msg.S) { if (msg.err) toast(msg.err); onState(msg.S, !!msg.force); }
+  else if (msg.t === 'pz') { if (!msg.p || !G.S || !mineInv(G.S.inv.find(i => i.id === msg.p.who) || {})) pzShow(msg.p); }
 }
 
 // shared ----------------------------------------------------------------

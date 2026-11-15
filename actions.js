@@ -7,9 +7,13 @@ async function evade(D, inv, ctx) {
   const ms = monAt(D, inv.space);
   if (!ms.length) return true;
   const allChoir = ms.every(m => m.type === 'choir');
-  const sk = allChoir ? 'will' : 'agi';
+  let sk = allChoir ? 'will' : 'agi';
   const need = Math.max(1, Math.max(...ms.map(m => MONSTERS[m.type].aware)) - 1);
+  let veil = false;
+  if ((inv.spells || []).includes('veil') && ctx.ask) veil = await ctx.ask('Cast Veil of Fog?', `Test Lore (${skillVal(D, inv, 'lore')}) instead of ${SKILL_NAMES[sk]} (${skillVal(D, inv, sk)}) to evade. Its hidden back is revealed afterwards.`);
+  if (veil) sk = 'lore';
   const s = await ctx.test(sk, {label: `Evade the ${ms.length > 1 ? 'monsters' : MONSTERS[ms[0].type].n}`, need});
+  if (veil) flipSpell(D, inv, 'veil').fx(D, inv, s >= need);
   if (s >= need) { log(D, `${nm(inv)} slips past the ${ms.length > 1 ? 'monsters' : MONSTERS[ms[0].type].n}.`); return true; }
   const worst = ms.slice().sort((a, b) => MONSTERS[b.type].dmg - MONSTERS[a.type].dmg)[0];
   log(D, `${nm(inv)} fails to evade — the action is lost.`, 'bad');
@@ -22,6 +26,7 @@ function giveContent(D, inv, c, where) {
   if (c === 'clues2') { inv.clues += 2; log(D, `${nm(inv)} searches ${where} and pieces something together (+2 Clues).`, 'clue'); return 'Notes and scraps that fit together. +2 Clues.'; }
   if (c.startsWith('ev:')) { gainEvidence(D, inv, c.slice(3)); return null; }
   if (c === 'items') return null;
+  if (c.startsWith('spell:')) { gainSpell(D, inv, c.slice(6)); return null; }
   inv.items.push(c);
   log(D, `${nm(inv)} searches ${where} and finds: ${ITEMS[c].n}.`, 'good');
   return `You find: ${ITEMS[c].n}. ${ITEMS[c].t}`;
@@ -37,7 +42,7 @@ const INTERACT = {
     async run(D, inv, ctx) {
       if (!(await ctx.gate())) return true;
       const s = await ctx.test('will', {label: 'Listen to the line', need: 1});
-      if (s >= 1) { inv.clues++; removeToken(D, 'phone'); story(D, 'A voice on the line', 'Through the hiss, a woman whispers: “Don’t let him finish the song. Whatever you do, don’t let him finish.” Then a dial tone.\n\n+1 Clue.', 'story'); log(D, `${nm(inv)} hears a warning on the line (+1 Clue).`, 'clue'); }
+      if (s >= 1) { inv.clues++; removeToken(D, 'phone'); story(D, 'A voice on the line', 'Through the hiss, a woman whispers: “Don’t let him finish the song. Whatever you do, don’t let him finish. If they come for you, breathe out and become the fog.” Then a dial tone.\n\n+1 Clue.', 'story'); log(D, `${nm(inv)} hears a warning on the line (+1 Clue).`, 'clue'); gainSpell(D, inv, 'veil'); }
       else scare(D, inv, 1, 'the line is singing');
       return true;
     }},
@@ -49,27 +54,30 @@ const INTERACT = {
       else scare(D, inv, 1, 'thirteen voices, one note');
       return true;
     }},
-  desk: {n: "Marrow's desk", info: () => 'The top drawer is locked and jammed.', label: () => 'Force the drawer (Observation, need 2)',
+  desk: {n: "Marrow's desk", info: () => 'The top drawer is locked and jammed.', label: () => 'Free the key (puzzle · Observation)',
     async run(D, inv, ctx) {
       if (!(await ctx.gate())) return true;
-      const s = await ctx.test('obs', {label: 'Work the jammed drawer', need: 2, noisy: true});
-      if (s >= 2) { removeToken(D, 'desk'); if (D.evLive.includes('desk')) gainEvidence(D, inv, 'desk'); else { inv.clues += 2; log(D, `${nm(inv)} finds Marrow's notes (+2 Clues).`, 'clue'); } }
-      else log(D, `${nm(inv)} rattles the drawer loudly. Something heard that.`, 'bad');
+      const r = await ctx.puzzle('desk', inv);
+      D.puzzles.desk = r.state;
+      if (r.state.solved) { removeToken(D, 'desk'); if (D.evLive.includes('desk')) gainEvidence(D, inv, 'desk'); else { inv.clues += 2; log(D, `${nm(inv)} finds Marrow's notes (+2 Clues).`, 'clue'); } }
+      else log(D, `${nm(inv)} works at the jammed bolts.`);
       return true;
     }},
-  organ: {n: 'Chapel organ', info: () => 'Thirteen stops. Someone has scratched numbers beside five of them.', label: () => 'Try the stops (Lore, need 2)',
+  organ: {n: 'Chapel organ', info: () => 'Thirteen stops. Someone has scratched numbers beside five of them.', label: () => 'Find the stops (puzzle · Lore)',
     async run(D, inv, ctx) {
       if (!(await ctx.gate())) return true;
-      const s = await ctx.test('lore', {label: 'Find the right stops', need: 2, noisy: true});
-      if (s >= 2) { removeToken(D, 'organ'); inv.clues += 2; story(D, 'The organ', 'The right stops draw a chord that is almost the hymn — but not quite. In the gap, for a moment, you can hear what the hymn is for: it is calling something up out of the lake.\n\n+2 Clues.', 'story'); log(D, `${nm(inv)} plays the organ (+2 Clues).`, 'clue'); }
-      else log(D, `${nm(inv)} pulls the wrong stops. The organ howls through the building.`, 'bad');
+      const r = await ctx.puzzle('organ', inv);
+      D.puzzles.organ = r.state;
+      if (r.wrong) { D.noise = inv.id; log(D, `${nm(inv)} pulls the wrong stops${r.wrong > 1 ? ' ' + r.wrong + ' times' : ''}. The organ howls through the building.`, 'bad'); }
+      if (r.state.solved) { removeToken(D, 'organ'); story(D, 'The organ', 'The right stops draw a chord that is almost the hymn — but not quite. In the gap, for a moment, you can hear what the hymn is for: it is calling something up out of the lake. The word for unmaking it rises in your throat.', 'story'); gainSpell(D, inv, 'wither'); }
       return true;
     }},
-  photo: {n: 'Torn photograph', info: () => 'Pieces of a photograph lie scattered on the slab.', label: () => 'Piece it together (Observation, need 2)',
+  photo: {n: 'Torn photograph', info: () => 'Pieces of a photograph lie scattered on the slab.', label: () => 'Piece it together (puzzle · Observation)',
     async run(D, inv, ctx) {
       if (!(await ctx.gate())) return true;
-      const s = await ctx.test('obs', {label: 'Fit the pieces', need: 2});
-      if (s >= 2) {
+      const r = await ctx.puzzle('photo', inv);
+      D.puzzles.photo = r.state;
+      if (r.state.solved) {
         removeToken(D, 'photo');
         if (D.goal === 'B' && D.ada && !D.ada.found) story(D, 'The photograph', `The ward, last spring. Thirteen patients. One girl is circled in ink: Ada Wren. Behind her you recognise the ${ROOMS[roomOf(D.ada.space)].n}.`, 'story');
         else { inv.clues += 2; log(D, `${nm(inv)} rebuilds the photograph (+2 Clues).`, 'clue'); }
@@ -79,13 +87,13 @@ const INTERACT = {
   engine: {n: 'The Resonance Engine',
     info: S => S.goal === 'A' ? `A machine of brass horns and copper coils. Progress: ${S.engine}/${CONFIG.engineNeed}.` : 'A machine of brass horns and copper coils, humming one endless note. You don’t yet know what it is for.',
     can: (S, inv) => S.goal !== 'A' ? [false, 'You don’t know what it is for yet.'] : !invAt(S, inv.space).some(i => i.items.includes('valve')) ? [false, 'You need the Valve Wheel here.'] : [true],
-    label: () => 'Tear it apart (Strength)',
+    label: () => 'Turn the valves (puzzle · Strength)',
     async run(D, inv, ctx) {
       if (!(await ctx.gate())) return true;
-      const s = await ctx.test('str', {label: 'Wrench the Engine apart'});
-      D.engine = Math.min(CONFIG.engineNeed, D.engine + s);
-      log(D, `${nm(inv)} tears at the Engine (${D.engine}/${CONFIG.engineNeed}).`, s ? 'good' : '');
-      if (D.engine >= CONFIG.engineNeed) { end(D, 'won', 'The Valve Wheel turns, the horns crack, and the Engine dies with a sound like a breath let out. Below Greywater, the lake goes quiet — and stays quiet.'); return true; }
+      const r = await ctx.puzzle('engine', inv);
+      D.puzzles.engine = r.state;
+      log(D, `${nm(inv)} turns the Engine's valves.`);
+      if (r.state.solved) { end(D, 'won', 'The Valve Wheel turns, the horns crack, and the Engine dies with a sound like a breath let out. Below Greywater, the lake goes quiet — and stays quiet.'); return true; }
       for (const i of D.inv.filter(x => !x.out && roomOf(x.space) === 'hydro')) if (autoTest(D, i, 'will') < 1) scare(D, i, 1, 'the Engine sings');
       return true;
     }},
@@ -118,7 +126,8 @@ function removeToken(D, id) { D.tokens = D.tokens.filter(t => t.id !== id); }
 const ACT = {
   async start(D, inv, i) {
     if (D.active >= 0 || D.done[i] || D.inv[i].out || D.phase !== 'play') return false;
-    D.active = i; D.actions = CONFIG.actions; D.moveLeft = 0;
+    D.active = i; D.actions = CONFIG.actions; D.moveLeft = 0; D.ext = 0;
+    if (D.inv[i].restrained) { D.inv[i].restrained = false; D.actions = 1; log(D, `${nm(D.inv[i])} is Restrained: only 1 action this turn.`, 'bad'); }
     log(D, `${nm(D.inv[i])} begins their turn.`);
     return 'free';
   },
@@ -135,9 +144,15 @@ const ACT = {
       D.actions--; inv.moveActs++; D.moveLeft = CONFIG.moveSpaces; fresh = true;
     }
     if (monAt(D, inv.space).length && !(await evade(D, inv, ctx))) { D.moveLeft = 0; return 'free'; }
+    const {prev} = bfs(D, inv.space, {blockMon: true});
+    const path = []; for (let c = to; c && c !== inv.space; c = prev[c]) path.unshift(c);
     inv.space = to; D.moveLeft -= d;
     if (D.ada && D.ada.escort === inv.id) D.ada.space = to;
     log(D, `${nm(inv)} moves to ${SP[to].n} (${ROOMS[roomOf(to)].n}).`);
+    for (const c of path) if (fireAt(D, c)) {
+      if (D.ext > 0) { D.ext--; delete D.fire[c]; log(D, `${nm(inv)} beats out the fire in ${SP[c].n}.`, 'good'); }
+      else hurt(D, inv, 1, `running through the fire in ${SP[c].n}`);
+    }
     return 'free';
   },
   async explore(D, inv, key, ctx) {
@@ -227,6 +242,39 @@ const ACT = {
     log(D, `${nm(inv)} trades with ${nm(o)}.`);
     return true;
   },
+  async cast(D, inv, a, ctx) {
+    const id = a.spell, Sp = SPELLS[id];
+    if (!Sp || !(inv.spells || []).includes(id) || Sp.type === 'reaction') return false;
+    let m = null, t = null;
+    if (Sp.type === 'attack' || Sp.target === 'monster') { m = D.monsters.find(x => x.mid === a.mid && roomOf(x.space) === roomOf(inv.space)); if (!m) return false; }
+    if (Sp.target === 'ally') { t = D.inv.find(x => x.id === a.target && !x.out && x.space === inv.space); if (!t) return false; }
+    if (Sp.type !== 'attack' && !(await ctx.gate())) return true;
+    let s = 0;
+    const front = Sp.type === 'attack' || Sp.target === 'monster' || id === 'hymn';
+    if (front) s = await ctx.test('lore', {label: `Cast ${Sp.n}`});
+    const b = flipSpell(D, inv, id);
+    if (b.test) s = await ctx.test(b.test, {label: `${Sp.n}: ${SKILL_NAMES[b.test]} test`});
+    if (ctx.toast) ctx.toast(`${Sp.n} — flipped: ${b.t}`);
+    b.fx(D, inv, s, m || t);
+    return true;
+  },
+  async extinguish(D, inv, a, ctx) {
+    if (!(await ctx.gate())) return true;
+    const s = await ctx.test('agi', {label: 'Beat out the flames'});
+    D.ext = (D.ext || 0) + s;
+    if (fireAt(D, inv.space) && D.ext > 0) { D.ext--; delete D.fire[inv.space]; }
+    log(D, s ? `${nm(inv)} fights the fire (${s} success${s === 1 ? '' : 'es'}: put out fire here or in spaces you move into this turn).` : `${nm(inv)} can't get the fire under control.`, s ? 'good' : 'bad');
+    return true;
+  },
+  async setfire(D, inv, a, ctx) {
+    const src = inv.items.includes('matches') ? 'matches' : inv.items.includes('oillamp') ? 'oillamp' : null;
+    if (!src) return false;
+    if (!(await ctx.gate())) return true;
+    if (src === 'matches') inv.items.splice(inv.items.indexOf('matches'), 1);
+    log(D, `${nm(inv)} sets a fire${src === 'matches' ? ' with the last of the matches' : ' with the Oil Lamp'}.`, 'bad');
+    setFire(D, inv.space);
+    return true;
+  },
   async endphase(D) {
     if (D.active >= 0 || !allDone(D)) return false;
     mythosPhase(D);
@@ -243,6 +291,6 @@ function hitMonster(D, m, dmg, who) {
     if (M.boss) story(D, 'Dr. Marrow falls', 'Marrow folds to the floor like an empty coat. His baton keeps twitching in time for a while after. It doesn’t end the song — but nobody is conducting it now.', 'story');
   } else log(D, `${who} for ${dmg}. The ${M.n} is hurt.`);
 }
-const NO_EVADE = ['attack', 'start', 'endturn', 'endphase'];
+const NO_EVADE = ['attack', 'start', 'endturn', 'endphase', 'extinguish'];
 const FREE_KINDS = ['move', 'start', 'endturn', 'endphase'];
 const needsAction = (D, kind) => !FREE_KINDS.includes(kind) && D.actions < 1;

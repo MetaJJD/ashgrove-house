@@ -47,6 +47,7 @@ const FLOOR_DEFS = `
 <pattern id="fl-tile" width="70" height="70" patternUnits="userSpaceOnUse"><rect width="70" height="70" fill="#5c5a52"/><rect width="35" height="35" fill="#4a4842"/><rect x="35" y="35" width="35" height="35" fill="#4a4842"/><path d="M0 0H70V70" fill="none" stroke="#2c2b27" stroke-width="2"/></pattern>
 <pattern id="fl-carpet" width="56" height="56" patternUnits="userSpaceOnUse"><rect width="56" height="56" fill="#4a1f22"/><path d="M28 6 L50 28 L28 50 L6 28 Z" fill="none" stroke="#6e3a2c" stroke-width="3"/><circle cx="28" cy="28" r="4" fill="#8a5a2c"/></pattern>
 <pattern id="fl-stone" width="140" height="70" patternUnits="userSpaceOnUse"><rect width="140" height="70" fill="#3f403f"/><path d="M0 35H140M70 0V35M35 35V70M105 35V70" stroke="#262726" stroke-width="3"/></pattern>
+<radialGradient id="firegrad" cx="50%" cy="100%" r="90%"><stop offset="0" stop-color="#ff7a1a"/><stop offset="0.6" stop-color="#a3260b" stop-opacity="0.6"/><stop offset="1" stop-color="#3a0b05" stop-opacity="0.2"/></radialGradient>
 <radialGradient id="vign" cx="50%" cy="50%" r="75%"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
 <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
 
@@ -88,6 +89,8 @@ function boardSVG(S) {
     for (const sid of Object.keys(R.sp)) {
       const s = SP[sid], sx = s.x * CELL, sy = s.y * CELL, sw = s.w * CELL, sh = s.h * CELL;
       const cls = ['space', reach[sid] ? 'reach' : '', act && act.space === sid && canAct() ? 'here' : ''].join(' ');
+      if (S.flood && S.flood[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#1f4f7a" opacity="0.42"/>${Array.from({length: Math.max(1, s.h * 2)}, (_, k) => `<path d="M${sx + 14} ${sy + 40 + k * 60} q15 -9 30 0 t30 0 t30 0" fill="none" stroke="#9cc4ee" stroke-width="3" opacity="0.7"/>`).join('')}`;
+      if (S.fire && S.fire[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="url(#firegrad)" opacity="0.6" class="fireov"/><path class="flame" d="M${sx + 30} ${sy + sh - 14} c-14 -12 -10 -26 0 -40 c2 12 10 14 12 6 c8 14 6 26 -12 34 z" fill="#ffb347" stroke="#7a2a08" stroke-width="2"/>`;
       if (S.dark[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#000" opacity="${lit(S, sid) ? 0.25 : 0.55}"/><g opacity="0.85"><circle cx="${sx + sw - 20}" cy="${sy + 20}" r="9" fill="#cfd6ff"/><circle cx="${sx + sw - 16}" cy="${sy + 17}" r="8" fill="#14121a"/></g>`;
       overlays += `<rect class="${cls}" data-act="space" data-sp="${sid}" x="${sx + 3}" y="${sy + 3}" width="${sw - 6}" height="${sh - 6}" rx="3"/>`;
     }
@@ -296,8 +299,17 @@ function renderSheet() {
       if (mineActive && I.use) b = hasAct ? `<button class="small" data-act="useitem" data-k="${k}">Use</button>` : '';
       return `<div class="it"><div><b>${esc(I.n)}</b><small>${esc(I.t)}</small></div>${b}</div>`;
     }).join('')}</div>` : '<small>Nothing.</small>';
+    h += (v.spells || []).length ? `<div class="eyebrow">Spells</div><div class="items">${v.spells.map(id => {
+      const Sp = SPELLS[id];
+      let b = '';
+      if (mineActive && Sp.type === 'action' && Sp.target !== 'monster') b = hasAct ? `<button class="small" data-act="cast" data-spell="${id}">Cast</button>` : '';
+      const note = Sp.type === 'reaction' ? ' (reaction)' : Sp.type === 'attack' || Sp.target === 'monster' ? ' (cast it from a monster’s card)' : '';
+      return `<div class="it spell"><div><b>${esc(Sp.n)}</b><small>${esc(Sp.front)}${note}</small></div>${b}</div>`;
+    }).join('')}</div>` : '';
     const bs = [];
     if (mineActive && v.id === 'mara') bs.push(btn('Field Medic', 'medic', {}, hasAct, 'Discard 1 face-down Damage here'));
+    if (mineActive && Object.keys(S.fire || {}).some(f => roomOf(f) === roomOf(v.space) || ADJ[v.space].some(a => a.to === f))) bs.push(btn('Extinguish', 'extinguish', {}, hasAct, `Agility ${skillVal(S, v, 'agi')}: each ✦ puts out a fire here or where you move this turn`));
+    if (mineActive && (v.items.includes('matches') || v.items.includes('oillamp')) && !fireAt(S, v.space)) bs.push(btn('Set fire here', 'setfire', {}, hasAct, v.items.includes('matches') ? 'Uses up the matches' : 'With the Oil Lamp'));
     if (me && me !== v && me.space === v.space && !v.out) bs.push(btn(`Trade with ${d.name.split(' ')[0]}`, 'trade', {with: v.id}, hasAct, '1 action'));
     if (mineInv(v) && v.insane) bs.push(btn('Read your insanity card', 'secret', {inv: v.id}, true, 'Only you'));
     if (bs.length) h += `<div class="acts">${bs.join('')}</div>`;
@@ -318,6 +330,7 @@ function renderSheet() {
         opts.push(btn(`Attack with ${ITEMS[k].n}`, 'attack', {mid: m.mid, w: k}, hasAct && ok, `${SKILL_NAMES[W.skill]} ${skillVal(S, me, W.skill)} +${W.bonus}`));
       }
       if (sameSpace && me.items.includes('holywater')) opts.push(btn('Throw Holy Water', 'holy', {mid: m.mid}, hasAct, '2 damage, no roll'));
+      for (const id of (me.spells || [])) { const Sp = SPELLS[id]; if ((Sp.type === 'attack' || Sp.target === 'monster') && sameRoom) opts.push(btn(`Cast ${Sp.n}`, 'cast', {spell: id, mid: m.mid}, hasAct, `Lore ${skillVal(S, me, 'lore')} · hidden back`)); }
       h += opts.length ? `<div class="acts">${opts.join('')}</div>` : `<small>Get into its space to fight it (or its room, with a ranged weapon).</small>`;
     }
   } else if (kind === 'search') {
@@ -489,13 +502,14 @@ async function doAction(kind, arg) {
     const ctx = {
       test: (sk, o) => rollTest(D, inv, sk, o),
       toast,
+      puzzle: (id, who) => runPuzzle(D, id, who),
+      ask: (title, text) => confirmBox(title, text),
       gate: async () => { if (gated) return passed; gated = true; if (NO_EVADE.includes(kind) || !monAt(D, inv.space).length) return true; passed = await evade(D, inv, ctx); return passed; },
     };
     const res = await ACT[kind](D, inv, arg, ctx);
     if (res === false) return;
     if (res !== 'free') D.actions--;
-    if (D.active >= 0) { const a = D.inv[D.active]; if (a.out || (D.actions <= 0 && D.moveLeft <= 0)) { D.done[D.active] = true; D.active = -1; D.moveLeft = 0; } }
-    if (kind === 'endturn' && D.active >= 0) { D.done[D.active] = true; D.active = -1; }
+    afterAction(D, kind);
     G.busy = false; committed = true;
     if (kind === 'start') G.moveMode = false;
     await commit(D);
@@ -518,6 +532,8 @@ function onState(S, force) {
   if (G.seenR == null) G.seenR = S.rseq;
   render();
   if (S.rseq > G.seenR) { G.seenR = S.rseq; if (S.roll && !G.myRolls.has(S.roll.seq) && G.mode === 'online') rollToast(S.roll); }
+  if (S.flip && G.seenFlip !== S.flip.seq) { if (G.seenFlip != null && G.mode === 'online' && !mineInv(S.inv.find(i => i.id === S.flip.who) || {})) toast(`${INVD(S.flip.who).name} cast ${SPELLS[S.flip.spell].n}: “${SPELLS[S.flip.spell].backs[S.flip.back].t}”`, 6000); G.seenFlip = S.flip.seq; }
+  if (G.seenFlip === undefined) G.seenFlip = S.flip ? S.flip.seq : null;
   queueStories(S);
   checkSecrets(S);
 }
@@ -632,6 +648,9 @@ function showRules() {
     <h3>Evading</h3><p>If a monster is in your space, you must pass an evade test before any action except Attack. Fail and the action is lost — and it hits you.</p>
     <h3>Tests</h3><p>Roll one die per point of skill: ✦ is a success, 🔍 can be turned into a success by spending a Clue (not in Darkness), blank is nothing.</p>
     <h3>Damage & Horror</h3><p>Taken as cards; some stay face up with lasting effects. When Damage reaches Health you are <b>Wounded</b> (one Move action per round); when Horror reaches Sanity you go <b>Insane</b> and draw a secret card. The second time either happens, you are eliminated — and the rest of you have until the end of the next investigator phase to win.</p>
+    <h3>Spells</h3><p>You see a spell’s front; its back stays hidden until you cast it, then you resolve the back — a bonus or a price — and gain a fresh copy with a new hidden back. Anyone can cast; Lore helps.</p>
+    <h3>Puzzles</h3><p>Some ❗ tokens are puzzles. You get steps equal to the skill shown (+1 per Clue, not in Darkness). Stop any time — progress is kept, and anyone can carry on later.</p>
+    <h3>Darkness, fire & flood</h3><p><b>Darkness:</b> no spending Clues unless you or someone next to you has a light, or fire is near. <b>Fire:</b> entering it, or acting in it, costs 1 Damage; it spreads each Mythos phase; <i>Extinguish</i> with Agility, or <i>Set fire</i> with matches or an oil lamp. <b>Flood:</b> Drowned Patients move freely through it; fire and water cancel out.</p>
     <h3>Winning</h3><p>Find out what happened. Your true goal is revealed once you have gathered enough evidence. Don’t take too long: something is keeping time.</p></div>`, 'Understood');
 }
 function showInstall() {
@@ -704,6 +723,14 @@ document.addEventListener('click', async e => {
       break;
     }
     case 'secret': showSecret(S, b.dataset.inv, false); break;
+    case 'extinguish': closeSheet(); doAction('extinguish'); break;
+    case 'setfire': closeSheet(); doAction('setfire'); break;
+    case 'cast': {
+      const me = S.inv[S.active], id = b.dataset.spell, Sp = SPELLS[id];
+      if (b.dataset.mid) { closeSheet(); doAction('cast', {spell: id, mid: +b.dataset.mid}); break; }
+      if (Sp.target === 'ally') { const people = invAt(S, me.space); const t = people.length === 1 ? people[0] : await choose(`${Sp.n}: on whom?`, people.map(p => ({label: INVD(p.id).name + (p === me ? ' (you)' : ''), sub: `${p.dmg.length} Damage · ${p.hor.length} Horror`, v: p}))); if (t) { closeSheet(); doAction('cast', {spell: id, target: t.id}); } break; }
+      closeSheet(); doAction('cast', {spell: id}); break;
+    }
     case 'takeover': takeover(+b.dataset.i); break;
   }
 });

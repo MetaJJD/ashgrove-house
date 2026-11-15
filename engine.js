@@ -34,11 +34,11 @@ const SKILL_SHORT = {str: 'STR', agi: 'AGI', obs: 'OBS', lore: 'LOR', inf: 'INF'
 const INVESTIGATORS = [
   {id: 'mara', name: 'Mara Voss', role: 'Night nurse', color: '#7fc0ae', hat: 'cap', hp: 7, san: 7, str: 2, agi: 3, obs: 3, lore: 2, inf: 3, will: 3, start: ['bandages'],
     ability: 'Field Medic', text: 'Action: discard 1 face-down Damage from yourself or someone in your space.'},
-  {id: 'elias', name: 'Elias Crane', role: 'Antiquarian', color: '#d2ad62', hat: 'specs', hp: 6, san: 8, str: 2, agi: 2, obs: 3, lore: 4, inf: 2, will: 3, start: ['lexicon'],
+  {id: 'elias', name: 'Elias Crane', role: 'Antiquarian', color: '#d2ad62', hat: 'specs', hp: 6, san: 8, str: 2, agi: 2, obs: 3, lore: 4, inf: 2, will: 3, start: ['lexicon'], spells: ['hymn'],
     ability: 'Erudite', text: 'On Lore tests, your blank dice are rerolled once.'},
   {id: 'dex', name: 'Dex Holloway', role: 'Ex-prizefighter', color: '#d07352', hat: 'flatcap', hp: 9, san: 5, str: 4, agi: 3, obs: 2, lore: 1, inf: 2, will: 2, start: ['knife'],
     ability: 'Brawler', text: 'Your melee attacks that hit deal 1 extra damage.'},
-  {id: 'agnes', name: 'Sister Agnes', role: 'Lapsed nun', color: '#a597d6', hat: 'veil', hp: 6, san: 8, str: 2, agi: 2, obs: 2, lore: 3, inf: 4, will: 4, start: ['holywater'],
+  {id: 'agnes', name: 'Sister Agnes', role: 'Lapsed nun', color: '#a597d6', hat: 'veil', hp: 6, san: 8, str: 2, agi: 2, obs: 2, lore: 3, inf: 4, will: 4, start: ['holywater'], spells: ['quiet'],
     ability: 'Faith', text: 'Each time you would suffer Horror, suffer 1 less.'},
   {id: 'juno', name: 'Juno Reyes', role: 'Photojournalist', color: '#dccf72', hat: 'cloche', hp: 7, san: 6, str: 2, agi: 4, obs: 4, lore: 2, inf: 3, will: 2, start: ['lantern'],
     ability: 'Keen Eye', text: 'On Observation tests, 🔍 results count as successes.'},
@@ -199,7 +199,7 @@ function newGame(picks) {
   const evLive = shuffle(Object.keys(EVIDENCE)).slice(0, 3);
   const pool = shuffle(['revolver', 'axe', 'bandages', 'matches', 'clues2', 'clues2', 'holywater', 'laudanum', 'nothing']);
   const spots = {};
-  const fixed = {boiler: 'valve', cabinet: 'laudanum', benches: 'oillamp'};
+  const fixed = {boiler: 'valve', cabinet: 'laudanum', benches: 'oillamp', bookcase: 'spell:binding', pews: 'spell:mend', tubs: 'spell:still'};
   let pi = 0;
   for (const id of Object.keys(SEARCH)) {
     if (fixed[id]) spots[id] = {c: fixed[id]};
@@ -211,7 +211,8 @@ function newGame(picks) {
   const S = {
     v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1,
     threat: 0, active: -1, actions: 0, moveLeft: 0, done: picks.map(() => false),
-    inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), clues: CONFIG.clueStart, dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
+    inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart, dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
+    puzzles: makePuzzles(), fire: {}, flood: {}, ext: 0, flip: null,
     rooms, tokens: [], spots, evLive, evidence: [], goal: null, engine: 0, ada: null, monsters: [], mid: 1, dark: {},
     decks: {dmg: shuffle(DMG_DECK), hor: shuffle(HOR_DECK)}, noise: null, lastRound: 0, pendingBoss: null,
     mythosUsed: [], log: [], stories: [], storySeq: 0, rseq: 0, roll: null, result: null, revealed: {},
@@ -244,7 +245,7 @@ function skillVal(S, inv, sk) {
 const hasFlag = (inv, f) => inv.hor.some(c => HOR_CARDS[c].up && HOR_CARDS[c].flag === f) || inv.dmg.some(c => DMG_CARDS[c].up && DMG_CARDS[c].flag === f);
 function lit(S, sid) {
   const near = [sid, ...ADJ[sid].filter(a => passable(S, a.link)).map(a => a.to)];
-  return S.inv.some(i => !i.out && near.includes(i.space) && i.items.some(k => ITEMS[k] && ITEMS[k].light));
+  return near.some(s => S.fire && S.fire[s]) || S.inv.some(i => !i.out && near.includes(i.space) && i.items.some(k => ITEMS[k] && ITEMS[k].light));
 }
 const inDark = (S, inv) => !!S.dark[inv.space] && !lit(S, inv.space);
 
@@ -263,6 +264,15 @@ function draw(S, kind) {
 }
 function hurt(S, inv, n, why, L) {
   if (inv.out || n <= 0) return;
+  const big = n >= 2;
+  if (big && (inv.spells || []).includes('still')) {
+    const b = flipSpell(S, inv, 'still');
+    n = b.prevent(n);
+    say(S, L, `Still Water: ${b.t}`, 'good');
+    if (b.horror) scare(S, inv, b.horror, 'the water remembers', L);
+  }
+  if (big && inv.items.includes('oillamp')) { inv.items.splice(inv.items.indexOf('oillamp'), 1); say(S, L, `${nm(inv)} drops the Oil Lamp. It shatters.`, 'bad'); setFire(S, inv.space, L); }
+  if (n <= 0) return;
   const got = [];
   for (let k = 0; k < n; k++) { const c = draw(S, 'dmg'); inv.dmg.push(c); if (DMG_CARDS[c].up) got.push(DMG_CARDS[c].n); }
   say(S, L, `${nm(inv)} suffers ${n} Damage${why ? ' — ' + why : ''}${got.length ? ` (${got.join(', ')}!)` : ''}.`, 'bad');
@@ -374,6 +384,7 @@ function bfs(S, from, opts = {}) {
     if (opts.blockMon && s !== from && monAt(S, s).length) continue;
     for (const a of ADJ[s]) {
       if (a.to in dist || !passable(S, a.link)) continue;
+      if (opts.avoidFire && S.fire && S.fire[a.to]) continue;
       dist[a.to] = dist[s] + 1; prev[a.to] = s; q.push(a.to);
     }
   }
@@ -401,17 +412,25 @@ function activateMonsters(S, L) {
     if (m.type === 'orderly' && S.noise) { const t = S.inv.find(i => i.id === S.noise && !i.out); if (t) targets = [t]; }
     if (!targets.length) return;
     const start = m.space;
-    for (let k = 0; k < M.speed; k++) {
+    fireHurtsMon(S, m, L);
+    if (!S.monsters.includes(m)) continue;
+    const bound = m.bound; m.bound = null;
+    if (bound) say(S, L, `The ${M.n} strains against the Binding Thread.`);
+    let budget = bound ? 0 : M.speed, guard = 0;
+    while (budget > 0 && guard++ < 6) {
       if (invAt(S, m.space).some(i => targets.includes(i))) break;
-      const {prev, dist} = bfs(S, m.space);
+      const {prev, dist} = bfs(S, m.space, {avoidFire: m.type === 'choir'});
       const goal = targets.map(t => t.space).filter(s => dist[s] != null).sort((a, b) => dist[a] - dist[b])[0];
       if (!goal) break;
       let c = goal; while (prev[c] !== m.space) c = prev[c];
       m.space = c;
+      if (!(m.type === 'drowned' && floodAt(S, c))) budget--;
+      if (fireAt(S, c)) { fireHurtsMon(S, m, L); if (!S.monsters.includes(m)) break; }
     }
+    if (!S.monsters.includes(m)) continue;
     if (m.space !== start) say(S, L, `${M.n} moves to the ${ROOMS[roomOf(m.space)].n} (${SP[m.space].n}).`);
     const here = invAt(S, m.space);
-    if (here.length) monsterAttack(S, m, pick(here), L);
+    if (here.length && bound !== 'all') monsterAttack(S, m, pick(here), L);
   }
 }
 function horrorChecks(S, L) {
@@ -454,6 +473,8 @@ const MYTHOS = [
   {id: 'cold', t: 'Cold water rises', f: 'The basement drains gurgle, then overflow.',
     fx: (S, L) => {
       const v = activeInv(S).filter(i => ROOMS[roomOf(i.space)].basement);
+      const bs = Object.keys(SP).filter(s => revealed(S, s) && ROOMS[roomOf(s)].basement && !floodAt(S, s));
+      if (bs.length) setFlood(S, pick(bs), L);
       if (!v.length) say(S, L, 'Below you, water laps at the bottom of the stairs.');
       v.forEach(i => { if (autoTest(S, i, 'agi') < 1) hurt(S, i, 1, 'the freezing water', L); else say(S, L, `${nm(i)} keeps their footing (Agility).`); });
     }},
@@ -463,6 +484,7 @@ const MYTHOS = [
       if (!v.length) say(S, L, 'Your lights hold it back — for now.');
       v.forEach(i => scare(S, i, 1, 'the dark sings', L));
     }},
+  {id: 'seep', min: 3, t: 'Water under the door', f: 'Lake water seeps under a door and spreads across the floor, black and very cold.', fx: (S, L) => { const c = Object.keys(SP).filter(s => revealed(S, s) && !floodAt(S, s)); if (c.length) setFlood(S, pick(c), L); }},
   {id: 'quiet', t: 'Nothing', f: 'Nothing happens. Somehow that is worse.', fx: (S, L) => {}},
   {id: 'hymn', t: 'The hymn rises', min: 6, f: 'Voices rise from below, in perfect and terrible harmony.', fx: (S, L) => say(S, L, spawn(S, 'choir'), 'bad')},
 ];
@@ -471,6 +493,7 @@ const BEATS = {
   8: {t: 'The water begins to sing', f: 'Beneath your feet, the lake under Greywater has found its voice. The lights go out across the building.', fx: (S, L) => {
     say(S, L, spawn(S, 'choir'), 'bad');
     shuffle(Object.keys(SP).filter(s => revealed(S, s) && !S.dark[s])).slice(0, 3).forEach(s => S.dark[s] = true);
+    if (S.rooms.boiler.rev) { say(S, L, 'The boiler bursts.', 'bad'); setFire(S, 'B1', L); }
   }},
   12: {t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
 };
@@ -492,6 +515,7 @@ function mythosPhase(S) {
     S.mythosUsed.push(ev.id);
     title = ev.t; flavor = ev.f; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); ev.fx(S, L);
   }
+  if (S.phase === 'play') spreadFire(S, L);
   if (S.phase === 'play') { L.push({t: '— The monsters move —', k: 'round'}); activateMonsters(S, L); }
   if (S.phase === 'play') { L.push({t: '— Horror checks —', k: 'round'}); horrorChecks(S, L); }
   if (S.phase === 'play' && S.threat >= CONFIG.threatMax) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
@@ -518,7 +542,7 @@ function gainEvidence(S, inv, key) {
 function theReveal(S) {
   S.goal = pick(['A', 'B']);
   if (S.goal === 'A') {
-    const t = 'The pieces fit together. Marrow built a machine — the Resonance Engine — in Hydrotherapy, to amplify the song of the lake. It is still running, and the hymn is building toward its final note.\n\nYOUR GOAL: Take the Valve Wheel from the Boiler Room to the Engine in Hydrotherapy and tear the machine apart (Interact, Strength — ' + CONFIG.engineNeed + ' successes in total, over as many attempts as it takes).\n\nDr. Marrow is waiting for you down there.';
+    const t = 'The pieces fit together. Marrow built a machine — the Resonance Engine — in Hydrotherapy, to amplify the song of the lake. It is still running, and the hymn is building toward its final note.\n\nYOUR GOAL: Bring the Valve Wheel from the Boiler Room to the Engine in Hydrotherapy, then turn its valves until the lake water drains away from the machine (a pipe puzzle: Interact, steps equal to your Strength).\n\nDr. Marrow is waiting for you down there.';
     story(S, 'The Reveal: the Resonance Engine', t, 'reveal');
     if (S.rooms.hydro.rev) spawn(S, 'marrow', 'Y3'); else S.pendingBoss = 'Y3';
   } else {
@@ -535,6 +559,6 @@ function theReveal(S) {
 }
 function goalText(S) {
   if (!S.goal) return `Act I · Find evidence (${S.evidence.length}/${CONFIG.evidenceNeeded})`;
-  if (S.goal === 'A') return `Act II · Silence the Engine (${S.engine}/${CONFIG.engineNeed})`;
+  if (S.goal === 'A') return 'Act II · Silence the Engine';
   return S.ada && S.ada.escort ? 'Act II · Lead Ada to the front doors' : 'Act II · Find Ada Wren';
 }

@@ -152,6 +152,28 @@ b.w{color:#ff9c90}b.i{color:#b9c3ff}
 .trade{display:grid;grid-template-columns:1fr 1fr;gap:12px}.trade>div{display:flex;flex-direction:column;gap:6px}.trade .moved{border-color:var(--candle)}
 .rules h3{font-size:19px;margin-top:14px;color:var(--candle)}
 .rules p{margin:6px 0}
+.fireov{animation:fire 1.1s ease-in-out infinite alternate}@keyframes fire{to{opacity:.38}}
+.flame{animation:flick .5s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}@keyframes flick{to{transform:scaleY(.85) skewX(4deg)}}
+.it.spell{border-color:#4b4380}.it.spell b{color:#c9bdf5}
+.modal.puzzle{max-width:560px}
+.pzbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:6px 0 10px;flex-wrap:wrap}
+.pgh{display:flex;flex-direction:column;gap:4px;margin:8px 0;max-height:180px;overflow:auto}
+.pg{display:flex;gap:10px;align-items:center}.pg b{color:var(--clue);letter-spacing:2px}.pg b.nr{color:#c9bdf5}
+.stop{font-style:normal;display:inline-block;border-radius:5px;padding:1px 7px;margin-right:3px;font-size:14px;color:#1a120c;border:1px solid #0004}
+.stop.s0{background:#d9b84a}.stop.s1{background:#9dc7a5}.stop.s2{background:#d98c6a}.stop.s3{background:#9dabeb}.stop.s4{background:#e6d8f0}
+button.stop{min-height:40px;font-size:15px}
+.slots{display:flex;gap:8px;justify-content:center;margin:10px 0}.slot{min-width:84px;min-height:38px;border:1px dashed var(--line2);border-radius:6px;display:grid;place-items:center;cursor:pointer}
+.palette{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+.slide{display:flex;align-items:center;justify-content:center;gap:6px}
+.sgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;width:min(300px,70vw);aspect-ratio:1;background:#120d0a;padding:4px;border-radius:8px;border:2px solid #3a2a1a}
+.sc{border-radius:5px;display:grid;place-items:center;font-size:22px;cursor:pointer}.sc.e{background:#1f1813}.sc.p{box-shadow:inset 0 0 0 2px #0007,inset 0 3px 0 #fff2}.sc.sel{outline:3px solid var(--candle)}
+.sexit{writing-mode:vertical-rl;color:var(--clue);font-size:13px}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:min(300px,78vw);aspect-ratio:1;margin:0 auto;background:#120d0a;padding:3px;border-radius:6px}
+.pgrid .pt{overflow:hidden;cursor:pointer;border-radius:2px}.pgrid .pt.sel{outline:3px solid var(--candle);outline-offset:-3px}
+.pipes{display:grid;grid-template-columns:24px auto 24px;grid-template-rows:repeat(4,1fr);align-items:center;justify-content:center;gap:0 4px}
+.pipes .pg4{grid-column:2;grid-row:1/5;display:grid;grid-template-columns:repeat(4,1fr);gap:2px;width:min(300px,70vw);aspect-ratio:1}
+.pipes .pin{grid-column:1;color:#5b8fd9;font-size:20px}.pipes .pout{grid-column:3;color:#5b8fd9;font-size:20px}
+.pp{cursor:pointer;border-radius:4px;overflow:hidden}
 @media (max-width:640px){.top{gap:6px;padding:5px 8px}.top h1{display:none}.pill{font-size:12.5px;padding:2px 8px}.top .net{display:none}.top .sp{display:none}.top button.small{min-height:34px;padding:3px 9px;font-size:14px}.chip .cst{display:none}.chip{padding:4px 6px}.hud{padding:6px 8px calc(6px + env(safe-area-inset-bottom))}.turnbox .row button{flex:1}}
 </style>
 </head>
@@ -161,6 +183,8 @@ b.w{color:#ff9c90}b.i{color:#b9c3ff}
 <script src="peerjs.min.js"></script>
 <script src="engine.js"></script>
 <script src="actions.js"></script>
+<script src="extras.js"></script>
+<script src="puzzles.js"></script>
 <script src="ui.js"></script>
 <script src="net.js"></script>
 <script>render(); initCaps();</script>
