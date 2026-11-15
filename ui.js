@@ -9,7 +9,7 @@ const app = $('#app');
 const CELL = 140;
 // art that has been dropped in (art/rooms/<id>.webp); everything else uses placeholder floors
 const PCLIP = '<clipPath id="pclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath>';
-const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara', 'elias', 'dex', 'agnes', 'juno'], monsters: []};
+const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara', 'elias', 'dex', 'agnes', 'juno'], monsters: ['orderly']};
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
@@ -132,7 +132,7 @@ function boardSVG(S) {
   S.monsters.forEach(m => add(m.space, (cx, cy) => {
     const M = MONSTERS[m.type];
     const r = M.boss ? 28 : 24;
-    return `<g class="mon ${M.boss ? 'boss' : ''}" data-act="tok" data-kind="mon" data-id="${m.mid}"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${M.boss ? '#1d1430' : '#2a0809'}" stroke="${M.boss ? '#c9bdf5' : '#d23c3f'}" stroke-width="4"/><text x="${cx}" y="${cy + 1}">${M.g}</text>${Array.from({length: Math.min(m.wounds, 8)}, (_, k) => `<circle cx="${cx - r + 6 + k * 7}" cy="${cy + r + 4}" r="3" fill="#ff5a55"/>`).join('')}</g>`;
+    return `<g class="mon ${M.boss ? 'boss' : ''}" data-act="tok" data-kind="mon" data-id="${m.mid}"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${M.boss ? '#1d1430' : '#2a0809'}" stroke="${M.boss ? '#c9bdf5' : '#d23c3f'}" stroke-width="4"/>${ART.monsters.includes(m.type) ? `<image href="art/monsters/${m.type}.webp" x="${cx - r + 2}" y="${cy - r + 2}" width="${2 * r - 4}" height="${2 * r - 4}" clip-path="url(#pclip)"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${M.boss ? '#c9bdf5' : '#d23c3f'}" stroke-width="4"/>` : `<text x="${cx}" y="${cy + 1}">${M.g}</text>`}${Array.from({length: Math.min(m.wounds, 8)}, (_, k) => `<circle cx="${cx - r + 6 + k * 7}" cy="${cy + r + 4}" r="3" fill="#ff5a55"/>`).join('')}</g>`;
   }));
   if (S.ada && S.ada.found) add(S.ada.space, (cx, cy) => `<g class="tok person" data-act="tok" data-kind="interact" data-id="ada"><circle cx="${cx}" cy="${cy}" r="22" fill="#e9e3d6" stroke="#6e5a3a" stroke-width="4"/><circle cx="${cx}" cy="${cy - 6}" r="7" fill="#3a2e24"/><path d="M${cx - 12} ${cy + 15} Q${cx} ${cy - 2} ${cx + 12} ${cy + 15} Z" fill="#3a2e24"/></g>`);
   for (const t of S.tokens) {
