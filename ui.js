@@ -7,6 +7,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '
 const para = s => esc(s).split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
 const app = $('#app');
 const CELL = 140;
+// art that has been dropped in (art/rooms/<id>.webp); everything else uses placeholder floors
+const ART = {rooms: ['corr'], portraits: [], monsters: []};
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
@@ -85,7 +87,7 @@ function boardSVG(S) {
   for (const [rid, R] of Object.entries(ROOMS)) {
     if (!S.rooms[rid].rev) continue;
     const x = R.x * CELL, y = R.y * CELL, w = R.w * CELL, h = R.h * CELL;
-    rooms += `<g class="room"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#fl-${R.floor})"/><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#vign)"/>`;
+    rooms += `<g class="room"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#fl-${R.floor})"/>${ART.rooms.includes(rid) ? `<image href="art/rooms/${rid}.webp" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none"/>` : `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#vign)"/>`}`;
     for (const sid of Object.keys(R.sp)) {
       const s = SP[sid], sx = s.x * CELL, sy = s.y * CELL, sw = s.w * CELL, sh = s.h * CELL;
       const cls = ['space', reach[sid] ? 'reach' : '', act && act.space === sid && canAct() ? 'here' : ''].join(' ');
