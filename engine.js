@@ -177,7 +177,7 @@ const SEARCH = {
   lockers: {n: 'Patient lockers', t: 'Thirteen small lockers, labelled by number.'},
   pews: {n: 'Pews', t: 'Kneelers, hymnals, a forgotten coat.'},
   drawers: {n: 'Cold drawers', t: 'Most are empty. One is not.', test: ['will', 1, 'Open it (test Will)']},
-  boiler: {n: 'Behind the boiler', t: 'Tools hang on hooks, slick with condensation.'},
+  boiler: {n: 'Behind the boiler', t: 'Tools lie on a workbench, slick with condensation.'},
   tubs: {n: 'Baths', t: 'Lake water, black and still. Your reflection is late.', test: ['will', 1, 'Reach in (test Will)']},
 };
 const EVIDENCE = {
