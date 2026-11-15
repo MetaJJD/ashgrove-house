@@ -405,7 +405,7 @@ function monsterAttack(S, m, inv, L) {
   const M = MONSTERS[m.type];
   const s = autoTest(S, inv, M.skill);
   const loss = Math.max(0, M.dmg - s);
-  const line = pick(M.atk);
+  const line = pick(M.atk).replace(/\.$/, '');
   if (!loss) { say(S, L, `${M.n} → ${nm(inv)}: ${line} (${SKILL_NAMES[M.skill]} ${s}: no harm done.)`); return; }
   if (M.kind === 'horror') scare(S, inv, loss, `${M.n}: ${line}`, L); else hurt(S, inv, loss, `${M.n}: ${line}`, L);
 }
@@ -505,6 +505,16 @@ const BEATS = {
   12: {t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
 };
 
+// Act I safety net: from the second story beat on, if the Reveal hasn't happened, the house points at one piece of evidence still waiting
+function evidenceHint(S, L) {
+  const left = S.evLive.filter(id => !S.evidence.includes(EVIDENCE[id].n));
+  if (!left.length) return;
+  const id = pick(left);
+  const rid = Object.keys(ROOMS).find(r => (ROOMS[r].tokens || []).some(t => t[2] === id));
+  if (!rid) return;
+  say(S, L, `The hymn falters for a moment, and in the silence you are sure of it: something that matters is waiting in the ${ROOMS[rid].n}.`, 'good');
+}
+
 function mythosPhase(S) {
   const L = [];
   S.step = 'mythos';
@@ -515,7 +525,7 @@ function mythosPhase(S) {
   S.threat++;
   const beat = BEATS[S.threat];
   let title, flavor;
-  if (beat) { title = beat.t; flavor = beat.f; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); }
+  if (beat) { title = beat.t; flavor = beat.f; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && S.threat > CONFIG.beats[0]) evidenceHint(S, L); }
   else {
     const opts = MYTHOS.filter(m => (!m.min || S.threat >= m.min) && !S.mythosUsed.slice(-4).includes(m.id));
     const ev = pick(opts);
@@ -523,8 +533,9 @@ function mythosPhase(S) {
     title = ev.t; flavor = ev.f; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); ev.fx(S, L);
   }
   if (S.phase === 'play') spreadFire(S, L);
-  if (S.phase === 'play') { L.push({t: '— The monsters move —', k: 'round'}); activateMonsters(S, L); }
-  if (S.phase === 'play') { L.push({t: '— Horror checks —', k: 'round'}); horrorChecks(S, L); }
+  const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };
+  if (S.phase === 'play') section('— The monsters move —', activateMonsters);
+  if (S.phase === 'play') section('— Horror checks —', horrorChecks);
   if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
   S.noise = null;
   S.step = 'inv';

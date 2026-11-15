@@ -96,7 +96,7 @@ function boardSVG(S) {
       const cls = ['space', reach[sid] ? 'reach' : '', act && act.space === sid && canAct() ? 'here' : ''].join(' ');
       if (S.flood && S.flood[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#1f4f7a" opacity="0.42"/>${Array.from({length: Math.max(1, s.h * 2)}, (_, k) => `<path d="M${sx + 14} ${sy + 40 + k * 60} q15 -9 30 0 t30 0 t30 0" fill="none" stroke="#9cc4ee" stroke-width="3" opacity="0.7"/>`).join('')}`;
       if (S.fire && S.fire[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="url(#firegrad)" opacity="0.6" class="fireov"/><path class="flame" d="M${sx + 30} ${sy + sh - 14} c-14 -12 -10 -26 0 -40 c2 12 10 14 12 6 c8 14 6 26 -12 34 z" fill="#ffb347" stroke="#7a2a08" stroke-width="2"/>`;
-      if (S.dark[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#000" opacity="${lit(S, sid) ? 0.25 : 0.55}"/><g opacity="0.85"><circle cx="${sx + sw - 20}" cy="${sy + 20}" r="9" fill="#cfd6ff"/><circle cx="${sx + sw - 16}" cy="${sy + 17}" r="8" fill="#14121a"/></g>`;
+      if (S.dark[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#000" opacity="${lit(S, sid) ? 0.2 : 0.62}"/><g opacity="0.85"><circle cx="${sx + sw - 20}" cy="${sy + 20}" r="9" fill="#cfd6ff"/><circle cx="${sx + sw - 16}" cy="${sy + 17}" r="8" fill="#14121a"/></g>`;
       overlays += `<rect class="${cls}" data-act="space" data-sp="${sid}" x="${sx + 3}" y="${sy + 3}" width="${sw - 6}" height="${sh - 6}" rx="3"/>`;
     }
     rooms += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#120c08" stroke-width="10"/>`;
@@ -163,8 +163,9 @@ function fitView(S, force) {
   G.vb = {x: (x0 - pad) * CELL, y: (y0 - pad) * CELL, w: (x1 - x0 + pad * 2) * CELL, h: (y1 - y0 + pad * 2) * CELL};
   const el = $('#board');
   if (el) { const r = el.getBoundingClientRect(); const aspect = r.width / Math.max(1, r.height); if (G.vb.w / G.vb.h < aspect) { const nw = G.vb.h * aspect; G.vb.x -= (nw - G.vb.w) / 2; G.vb.w = nw; } else { const nh = G.vb.w / aspect; G.vb.y -= (nh - G.vb.h) / 2; G.vb.h = nh; } }
-  const minW = 3.4 * CELL;
-  if (G.vb.w < minW) { const k = minW / G.vb.w; G.vb.x -= (G.vb.w * k - G.vb.w) / 2; G.vb.y -= (G.vb.h * k - G.vb.h) / 2; G.vb.w *= k; G.vb.h *= k; }
+  // never zoom in further than ~7 x 5 squares, so a single room doesn't fill the screen with giant tokens
+  const k = Math.max(7 * CELL / G.vb.w, 5 * CELL / G.vb.h);
+  if (k > 1) { G.vb.x -= (G.vb.w * k - G.vb.w) / 2; G.vb.y -= (G.vb.h * k - G.vb.h) / 2; G.vb.w *= k; G.vb.h *= k; }
 }
 function applyVB() { const svg = $('#board svg'); if (svg && G.vb) svg.setAttribute('viewBox', `${G.vb.x} ${G.vb.y} ${G.vb.w} ${G.vb.h}`); }
 
