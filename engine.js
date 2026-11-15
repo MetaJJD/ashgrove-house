@@ -13,7 +13,10 @@ const CONFIG = {
   threatByPlayers: {2: 23, 3: 17, 4: 15},  // tuned by simulation for ~35–42% wins
   evLive: 4,             // how many of the 5 evidence sources hold evidence this game
   jamNeed: 1,            // successes to force the jammed stairwell door
-  fireSpread: 0.5,         // chance fire spreads each Mythos phase
+  fireSpread: 0.4,         // chance fire spreads each Mythos phase
+  fireCap: 3,              // most spaces that can burn at once (0 = no limit)
+  lateBurst: true,         // boiler bursts even if unexplored: the fire is waiting when you open the Boiler Room
+  noiseSummon: false,      // noise with no Orderly on the board calls one out of the walls
   lampDropAt: 3,         // damage in one hit that makes a held Oil Lamp drop and start a fire
   beats: [4, 8, 12],     // story escalations
   engineNeed: 5,         // goal A: Strength successes to silence the Engine
@@ -350,6 +353,7 @@ function revealRoom(S, rid, by) {
   if (R.dark) Object.keys(R.sp).forEach(s => S.dark[s] = true);
   const L = [];
   for (const [type, sp] of (R.spawn || [])) L.push(spawn(S, type, sp));
+  if (rid === 'boiler' && S.boilerBurst) { S.boilerBurst = false; S.fire = S.fire || {}; S.fire.B1 = true; L.push('The boiler has burst. Fire has taken hold around it.'); }
   if (S.pendingBoss && roomOf(S.pendingBoss) === rid) { L.push(spawn(S, 'marrow', S.pendingBoss)); S.pendingBoss = null; }
   if (S.ada && !S.ada.found && roomOf(S.ada.space) === rid) { S.ada.found = true; L.push('Someone is here: a young woman in a patient’s gown, humming under her breath. Ada Wren.'); }
   if (by) story(S, R.n, R.d + (L.length ? '\n\n' + L.join('\n') : '') + (R.dark ? '\n\nIt is dark here. You cannot spend Clues in Darkness without a light.' : ''), 'room');
@@ -501,6 +505,7 @@ const BEATS = {
     say(S, L, spawn(S, 'choir'), 'bad');
     shuffle(Object.keys(SP).filter(s => revealed(S, s) && !S.dark[s])).slice(0, 3).forEach(s => S.dark[s] = true);
     if (S.rooms.boiler.rev) { say(S, L, 'The boiler bursts.', 'bad'); setFire(S, 'B1', L); }
+    else if (CONFIG.lateBurst) { S.boilerBurst = true; say(S, L, 'Far below, something bursts with a deep metallic boom.', 'bad'); }
   }},
   12: {t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
 };
@@ -534,6 +539,7 @@ function mythosPhase(S) {
   }
   if (S.phase === 'play') spreadFire(S, L);
   const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };
+  if (S.phase === 'play' && CONFIG.noiseSummon && S.noise && !S.monsters.some(m => m.type === 'orderly')) { const who = S.inv.find(i => i.id === S.noise); if (who && !who.out) say(S, L, `The noise ${nm(who)} made has been heard. ` + spawn(S, 'orderly'), 'bad'); }
   if (S.phase === 'play') section('— The monsters move —', activateMonsters);
   if (S.phase === 'play') section('— Horror checks —', horrorChecks);
   if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');

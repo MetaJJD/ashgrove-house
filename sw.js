@@ -1,5 +1,5 @@
 // Offline cache for Greywater. Pages load fresh when online, cached copy when offline.
-const CACHE = 'greywater-v21';
+const CACHE = 'greywater-v22';
 const ASSETS = ['./', './index.html', './peerjs.min.js', './engine.js', './actions.js', './extras.js', './puzzles.js', './ui.js', './net.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

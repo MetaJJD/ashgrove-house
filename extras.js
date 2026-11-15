@@ -98,6 +98,7 @@ function setFlood(D, s, L) {
 function spreadFire(D, L) {
   const fires = Object.keys(D.fire || {});
   if (!fires.length || Math.random() >= CONFIG.fireSpread) return;
+  if (CONFIG.fireCap && fires.length >= CONFIG.fireCap) return;
   const opts = [];
   for (const f of fires) for (const a of ADJ[f]) if (passable(D, a.link) && !fireAt(D, a.to)) opts.push(a.to);
   if (!opts.length) return;
@@ -110,8 +111,8 @@ function fireHurtsMon(D, m, L) {
   if (!fireAt(D, m.space)) return;
   const M = MONSTERS[m.type];
   m.wounds += 1;
-  say(D, L, `The ${M.n} burns.`, 'good');
-  if (m.wounds >= M.hp) { D.monsters = D.monsters.filter(x => x !== m); say(D, L, `The ${M.n} is destroyed by the fire.`, 'good'); }
+  say(D, L, `The ${M.n.replace(/^The /, "")} burns.`, 'good');
+  if (m.wounds >= M.hp) { D.monsters = D.monsters.filter(x => x !== m); say(D, L, `The ${M.n.replace(/^The /, "")} is destroyed by the fire.`, 'good'); }
 }
 
 // ================================================================ PUZZLES
