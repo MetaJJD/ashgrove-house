@@ -112,7 +112,7 @@ const ROOMS = {
     sp: {N1: [0, 0, 1, 2, 'Medicine cabinet'], N2: [1, 0, 1, 2, 'Desk']},
     tokens: [['N1', 'search', 'cabinet'], ['N2', 'person', 'pell']]},
   office: {n: "Director's Office", x: 3, y: 2, w: 3, h: 2, floor: 'carpet',
-    d: 'A fine office gone to rot. Sheet music is pinned to every wall, every page the same single note.',
+    d: 'A fine office gone to rot. Sheet music lies scattered over the desk and floor, every page the same single note.',
     sp: {O1: [0, 0, 2, 2, 'Desk'], O2: [2, 0, 1, 2, 'Bookcase']},
     tokens: [['O1', 'interact', 'desk'], ['O2', 'search', 'bookcase']]},
   ward: {n: 'Patient Ward', x: 6, y: 1, w: 4, h: 3, floor: 'wood',
