@@ -9,10 +9,16 @@ const CONFIG = {
   moveSpaces: 2,         // spaces per Move action
   clueStart: 1,
   evidenceNeeded: 3,
-  threatMax: 14,         // hidden clock: lose when it reaches this
+  threatMax: 14,         // hidden clock: lose when it reaches this (overridden per player count below)
+  threatByPlayers: {2: 23, 3: 17, 4: 15},  // tuned by simulation for ~35–42% wins
+  evLive: 4,             // how many of the 5 evidence sources hold evidence this game
+  jamNeed: 1,            // successes to force the jammed stairwell door
+  fireSpread: 0.5,         // chance fire spreads each Mythos phase
+  lampDropAt: 3,         // damage in one hit that makes a held Oil Lamp drop and start a fire
   beats: [4, 8, 12],     // story escalations
   engineNeed: 5,         // goal A: Strength successes to silence the Engine
   maxMonsters: 7,
+  maxByPlayers: {2: 2, 3: 3, 4: 5},  // monsters on the board at once (the boss never counts)
 };
 
 // ------------------------------------------------------------- dice
@@ -184,19 +190,19 @@ const EVIDENCE = {
 
 // ------------------------------------------------------------- monsters
 const MONSTERS = {
-  orderly: {n: 'Hollowed Orderly', g: 'O', hp: 4, aware: 2, horror: 1, dmg: 2, speed: 2, skill: 'str', kind: 'damage',
+  orderly: {n: 'Hollowed Orderly', g: 'O', hp: 4, aware: 2, horror: 1, dmg: 1, speed: 2, skill: 'str', kind: 'damage',
     bio: 'Hunts whoever last made a noise.', atk: ['Its cold hands pin you to the wall.', 'It swings a ring of keys like a cosh.', 'It drags you toward a door that isn’t there.']},
   drowned: {n: 'Drowned Patient', g: 'D', hp: 3, aware: 1, horror: 1, dmg: 2, speed: 1, skill: 'agi', kind: 'damage',
     bio: 'Slow, heavy, relentless.', atk: ['It wraps its arms around you and sinks, as if into deep water.', 'It coughs lake water into your face and claws at you.']},
-  choir: {n: 'The Choir', g: 'C', hp: 5, aware: 3, horror: 2, dmg: 2, speed: 1, skill: 'will', kind: 'horror',
+  choir: {n: 'The Choir', g: 'C', hp: 5, aware: 3, horror: 1, dmg: 1, speed: 1, skill: 'will', kind: 'horror',
     bio: 'A swarm of voices. Hurts the mind, not the body. Worse in Darkness.', atk: ['A hundred voices sing your name in harmony.', 'The song gets inside your teeth.']},
-  marrow: {n: 'Dr. Marrow', g: 'M', hp: 10, aware: 3, horror: 2, dmg: 3, speed: 1, skill: 'str', kind: 'damage', boss: true,
+  marrow: {n: 'Dr. Marrow', g: 'M', hp: 8, aware: 3, horror: 2, dmg: 2, speed: 1, skill: 'str', kind: 'damage', boss: true,
     bio: 'The Conductor. Guards what you came to do.', atk: ['He conducts, and your bones answer.', 'He strikes you with his baton, and the room rings like a bell.']},
 };
 
 // --------------------------------------------------------------- state
 function newGame(picks) {
-  const evLive = shuffle(Object.keys(EVIDENCE)).slice(0, 3);
+  const evLive = shuffle(Object.keys(EVIDENCE)).slice(0, CONFIG.evLive);
   const pool = shuffle(['revolver', 'axe', 'bandages', 'matches', 'clues2', 'clues2', 'holywater', 'laudanum', 'nothing']);
   const spots = {};
   const fixed = {boiler: 'valve', cabinet: 'laudanum', benches: 'oillamp', bookcase: 'spell:binding', pews: 'spell:mend', tubs: 'spell:still'};
@@ -209,7 +215,7 @@ function newGame(picks) {
   const rooms = {};
   Object.keys(ROOMS).forEach(r => rooms[r] = {rev: false});
   const S = {
-    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1,
+    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax, maxMon: CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters,
     threat: 0, active: -1, actions: 0, moveLeft: 0, done: picks.map(() => false),
     inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart, dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
     puzzles: makePuzzles(), fire: {}, flood: {}, ext: 0, flip: null,
@@ -271,7 +277,7 @@ function hurt(S, inv, n, why, L) {
     say(S, L, `Still Water: ${b.t}`, 'good');
     if (b.horror) scare(S, inv, b.horror, 'the water remembers', L);
   }
-  if (big && inv.items.includes('oillamp')) { inv.items.splice(inv.items.indexOf('oillamp'), 1); say(S, L, `${nm(inv)} drops the Oil Lamp. It shatters.`, 'bad'); setFire(S, inv.space, L); }
+  if (n >= CONFIG.lampDropAt && inv.items.includes('oillamp')) { inv.items.splice(inv.items.indexOf('oillamp'), 1); say(S, L, `${nm(inv)} drops the Oil Lamp. It shatters.`, 'bad'); setFire(S, inv.space, L); }
   if (n <= 0) return;
   const got = [];
   for (let k = 0; k < n; k++) { const c = draw(S, 'dmg'); inv.dmg.push(c); if (DMG_CARDS[c].up) got.push(DMG_CARDS[c].n); }
@@ -362,7 +368,7 @@ function exploreTargets(S) {
 
 // ------------------------------------------------------------ monsters
 function spawn(S, type, sp) {
-  if (S.monsters.length >= CONFIG.maxMonsters && !MONSTERS[type].boss) { S.threat++; return 'The house is crowded with horrors. The hidden clock moves faster.'; }
+  if (S.monsters.filter(m => !MONSTERS[m.type].boss).length >= (S.maxMon || CONFIG.maxMonsters) && !MONSTERS[type].boss) return 'Something moves inside the walls, but does not come out — yet.';
   if (!sp) {
     const cand = Object.keys(SP).filter(s => revealed(S, s));
     const dist = distFromInvestigators(S);
@@ -442,8 +448,9 @@ function horrorChecks(S, L) {
     const top = ms.find(m => MONSTERS[m.type].horror + (m.type === 'choir' && S.dark[m.space] ? 1 : 0) === hz);
     const w = autoTest(S, inv, 'will');
     const loss = Math.max(0, hz - w);
-    if (loss) scare(S, inv, loss, `the sight of the ${MONSTERS[top.type].n}`, L);
-    else say(S, L, `${nm(inv)} holds their nerve before the ${MONSTERS[top.type].n} (Will ${w}).`);
+    const tn = MONSTERS[top.type].n.replace(/^The /, '');
+    if (loss) scare(S, inv, loss, `the sight of the ${tn}`, L);
+    else say(S, L, `${nm(inv)} holds their nerve before the ${tn} (Will ${w}).`);
   }
 }
 
@@ -518,7 +525,7 @@ function mythosPhase(S) {
   if (S.phase === 'play') spreadFire(S, L);
   if (S.phase === 'play') { L.push({t: '— The monsters move —', k: 'round'}); activateMonsters(S, L); }
   if (S.phase === 'play') { L.push({t: '— Horror checks —', k: 'round'}); horrorChecks(S, L); }
-  if (S.phase === 'play' && S.threat >= CONFIG.threatMax) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
+  if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
   S.noise = null;
   S.step = 'inv';
   if (S.phase === 'play') {

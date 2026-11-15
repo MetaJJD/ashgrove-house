@@ -351,7 +351,7 @@ function renderSheet() {
     const t = exploreTargets(S).find(x => x.key === id); if (!t) return closeSheet();
     const jam = t.link.door != null && DOORS[t.link.door].jam;
     h += `<div class="sh-head"><svg width="44" height="44" viewBox="0 0 44 44">${tokenIcon('explore', 22, 22, 19)}</svg><div><h2>${t.link.stairs != null ? 'Stairs down' : 'A closed door'}</h2><div class="role">Explore · from ${esc(SP[t.from].n)}</div></div></div>
-      <p class="flav">${t.link.stairs != null ? 'The stairs descend into cold, wet dark.' : jam ? 'The door is swollen in its frame. You will have to force it (Strength, 2 successes).' : 'You don’t know what is on the other side.'}</p>`;
+      <p class="flav">${t.link.stairs != null ? 'The stairs descend into cold, wet dark.' : jam ? `The door is swollen in its frame. You will have to force it (Strength, ${CONFIG.jamNeed} success${CONFIG.jamNeed > 1 ? 'es' : ''}).` : 'You don’t know what is on the other side.'}</p>`;
     if (me) h += `<div class="acts">${me.space === t.from ? btn(jam ? 'Force the door (Strength)' : 'Explore', 'explore', {id}, hasAct, '1 action') : '<small>Stand in the space next to this door to explore.</small>'}</div>`;
   } else if (kind === 'stairs') {
     h += `<h2>Stairs</h2><p class="flav">They connect the Stairwell and the Boiler Room. Moving along them counts as moving one space.</p>`;

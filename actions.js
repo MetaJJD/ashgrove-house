@@ -160,8 +160,8 @@ const ACT = {
     if (!t) return false;
     if (!(await ctx.gate())) return true;
     if (t.link.door != null && DOORS[t.link.door].jam) {
-      const s = await ctx.test('str', {label: 'Force the jammed door', need: 2, noisy: true});
-      if (s < 2) { log(D, `${nm(inv)} throws their weight against the door. It shifts, but holds.`, 'bad'); return true; }
+      const s = await ctx.test('str', {label: 'Force the jammed door', need: CONFIG.jamNeed, noisy: true});
+      if (s < CONFIG.jamNeed) { log(D, `${nm(inv)} throws their weight against the door. It shifts, but holds.`, 'bad'); return true; }
     }
     log(D, `${nm(inv)} explores: ${ROOMS[t.room].n}.`, 'good');
     revealRoom(D, t.room, inv);
