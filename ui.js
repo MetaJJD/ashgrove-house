@@ -8,7 +8,7 @@ const para = s => esc(s).split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}<
 const app = $('#app');
 const CELL = 140;
 // art that has been dropped in (art/rooms/<id>.webp); everything else uses placeholder floors
-const ART = {rooms: ['corr', 'hall', 'day'], portraits: [], monsters: []};
+const ART = {rooms: ['corr', 'hall', 'day', 'nurse'], portraits: [], monsters: []};
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
