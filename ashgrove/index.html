@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ashgrove House</title>
+<meta name="description" content="A cooperative, turn-based horror game for 1–4 players. Play together on phones and computers.">
+<meta name="theme-color" content="#0b0908">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0908; --panel:#16110e; --panel2:#1e1814; --line:#3b2f26; --line2:#56443a;
+  --ink:#eadfc9; --dim:#a8977c; --faint:#6e604f;
+  --candle:#e2a94b; --candle2:#8a5f22; --blood:#a8282b; --blood2:#561315;
+  --hp:#b8423a; --san:#7f8fd4; --clue:#d9c46a; --good:#86a77e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:'Crimson Pro',Georgia,serif;font-size:17px;line-height:1.4;-webkit-font-smoothing:antialiased}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background:radial-gradient(ellipse 120% 70% at 50% -10%,#2a1d15 0%,#120d0a 45%,#0b0908 75%) fixed}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.65) 100%);z-index:50}
+h1,h2,h3{font-family:'IM Fell English SC',Georgia,serif;font-weight:400;letter-spacing:.03em;margin:0}
+em,i{font-family:'IM Fell English',Georgia,serif}
+button{font:inherit;color:var(--ink);background:linear-gradient(#2b221c,#1b1511);border:1px solid var(--line2);border-radius:6px;padding:9px 14px;cursor:pointer;min-height:44px;text-align:left;transition:border-color .15s,background .15s}
+button:hover:not(:disabled){border-color:var(--candle)}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.primary{background:linear-gradient(#8b2224,#531315);border-color:#b8383a;text-align:center}
+button.ghost{background:transparent}
+button.small{min-height:34px;padding:5px 10px;font-size:15px}
+input{font:inherit;color:var(--ink);background:#0f0b09;border:1px solid var(--line2);border-radius:6px;padding:9px 12px;min-height:44px;text-transform:uppercase;letter-spacing:.2em;width:9em}
+input:focus{outline:none;border-color:var(--candle)}
+small,.dim{color:var(--dim)}
+.eyebrow{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+#app{position:relative;z-index:1}
+
+/* ---------- home ---------- */
+.home{max-width:760px;margin:0 auto;padding:36px 20px 60px}
+.title{text-align:center;margin:10px 0 26px}
+.title h1{font-size:clamp(44px,9vw,78px);line-height:1;color:var(--ink);text-shadow:0 0 22px rgba(226,169,75,.35),0 0 2px #000;animation:flicker 7s infinite}
+.title p{font-family:'IM Fell English',serif;font-style:italic;color:var(--dim);max-width:540px;margin:14px auto 0;font-size:18px}
+@keyframes flicker{0%,100%{opacity:1}47%{opacity:1}48%{opacity:.72}49%{opacity:1}73%{opacity:.9}74%{opacity:1}}
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:10px;padding:18px}
+.card + .card{margin-top:14px}
+.card h2{font-size:23px;margin-bottom:10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.list button{display:flex;justify-content:space-between;gap:10px;width:100%}
+.note{font-size:15px;color:var(--dim);margin-top:8px}
+
+/* ---------- investigator picker ---------- */
+.invgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:12px}
+.invc{position:relative;border:1px solid var(--line);border-radius:9px;padding:12px;background:#120e0b;cursor:pointer;text-align:left;display:block;width:100%;min-height:0}
+.invc.mine{border-color:var(--candle);box-shadow:0 0 0 1px var(--candle) inset}
+.invc.taken{opacity:.45;cursor:not-allowed}
+.invc .nm{font-family:'IM Fell English SC',serif;font-size:20px;display:flex;align-items:center;gap:8px}
+.invc .role{font-style:italic;font-family:'IM Fell English',serif;color:var(--dim);font-size:15px}
+.invc .tag{position:absolute;top:10px;right:10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--candle)}
+.dot{width:14px;height:14px;border-radius:50%;display:inline-block;flex:none;box-shadow:0 0 0 2px #0008}
+.stats{display:flex;gap:5px;margin:8px 0 6px;flex-wrap:wrap}
+.stat{font-size:12px;letter-spacing:.06em;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--dim)}
+.stat b{color:var(--ink);font-weight:600}
+.abil{font-size:14.5px;color:var(--dim)}
+.abil b{color:var(--ink);font-weight:600}
+
+/* ---------- game ---------- */
+.game{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;padding:12px;max-width:1440px;margin:0 auto}
+@media (max-width:960px){.game{grid-template-columns:1fr}}
+.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.topbar h1{font-size:26px;margin-right:auto}
+.doom{display:flex;align-items:center;gap:8px}
+.pips{display:flex;gap:3px;flex-wrap:wrap}
+.pip{width:12px;height:12px;border-radius:2px;border:1px solid var(--line2);background:#0d0a08}
+.pip.on{background:var(--blood);border-color:#d34a4c;box-shadow:0 0 6px #a8282b88}
+.pip.boss{border-color:#9a8fc7}
+.pip.frag.on{background:var(--clue);border-color:#f0de86;box-shadow:0 0 6px #d9c46a88}
+.pip.rit.on{background:#b9a6f0;border-color:#ddd2ff;box-shadow:0 0 6px #9a8fc788}
+.mapwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#070605;padding:6px;-webkit-overflow-scrolling:touch}
+svg.map{display:block;width:100%;min-width:540px;height:auto;user-select:none;-webkit-user-select:none}
+.room rect.bg{fill:url(#gSeen);stroke:#4a3a2e;stroke-width:1.5}
+.room.dark rect.bg{fill:url(#gDark)}
+.room.fog rect.bg{fill:#0e0b09;stroke:#2c241e;stroke-dasharray:5 5}
+.room.here rect.bg{stroke:var(--candle);stroke-width:2.5}
+.room.can-move{cursor:pointer}
+.room.can-move rect.bg{stroke:var(--candle);stroke-width:2.5;animation:pulse 1.6s ease-in-out infinite}
+.room.can-move.fog rect.bg{stroke-dasharray:none}
+.room:hover rect.bg{filter:brightness(1.25)}
+@keyframes pulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.35}}
+.rname{font-family:'IM Fell English SC',serif;font-size:19px;fill:var(--ink)}
+.room.dark .rname{fill:#c7b9a0}
+.rsearch{font-size:20px;fill:var(--clue)}
+.fogq{font-family:'IM Fell English',serif;font-size:40px;fill:#3a2f27;text-anchor:middle}
+.tok text{font-family:'IM Fell English SC',serif;font-size:17px;fill:#120d0a;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.tok.turn circle{stroke:#fff3d6;stroke-width:3}
+.mon circle{fill:#2a0809;stroke:#d23c3f;stroke-width:2}
+.mon.boss circle{fill:#1d1430;stroke:#c9bdf5;stroke-width:2.5}
+.mon text{font-family:'IM Fell English SC',serif;font-size:16px;fill:#ffb3b3;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.mon.boss text{fill:#e7e0ff}
+.mon .hpt{font-family:'Crimson Pro',serif;font-size:13px;fill:#ff9c9c}
+.door{fill:#6b4b2b;stroke:#120d0a;stroke-width:1.5}
+.door.key{fill:var(--blood);}
+.door.seal{fill:#5b4c93}
+.doorg text{font-size:13px;fill:#fff;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.roominfo{margin-top:10px}
+.roominfo h3{font-size:21px}
+.roominfo p{margin:4px 0;font-family:'IM Fell English',serif;font-style:italic;color:var(--dim)}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.turn{border-left:3px solid var(--candle)}
+.turn.wait{border-left-color:var(--line2)}
+.turn .who{font-family:'IM Fell English SC',serif;font-size:22px}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.acts button{font-size:15.5px;line-height:1.2}
+.acts button small{display:block;font-size:13px}
+.acts .wide{grid-column:1/-1}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:14px;margin:8px 0}
+.bar{height:9px;border-radius:5px;background:#0c0908;border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%}
+.bar.hp i{background:linear-gradient(90deg,#7a221d,var(--hp))}
+.bar.san i{background:linear-gradient(90deg,#3f4a87,var(--san))}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:13.5px;border:1px solid var(--line2);border-radius:999px;padding:2px 9px;background:#120e0b}
+.chip.clue{border-color:#8a7a33;color:var(--clue)}
+.party .p{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.party .p:first-of-type{border-top:0}
+.party .p .nm{font-family:'IM Fell English SC',serif;font-size:17px}
+.party .p .sub{grid-column:2/4;font-size:13.5px;color:var(--dim)}
+.mini{display:flex;gap:6px;font-size:13px;color:var(--dim)}
+.mini b{font-weight:600}
+.mini .h{color:#e07a72}.mini .s{color:#a5b2ee}
+.out{opacity:.45;text-decoration:line-through}
+.obj{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;font-size:15px}
+.log{max-height:320px;overflow:auto;font-size:15px;padding-right:4px}
+.log div{padding:4px 0;border-top:1px dashed #2c241e}
+.log .bad{color:#e09a8e}.log .dire{color:#ff7c72;font-weight:600}.log .good{color:#b9d3a8}.log .clue{color:var(--clue)}
+.log .round{color:var(--candle);font-family:'IM Fell English SC',serif;text-align:center;border-top:1px solid var(--line2)}
+.log .myth{color:#c4b9ef}
+.banner{text-align:center;padding:22px}
+.banner h2{font-size:34px}
+.won h2{color:var(--clue);text-shadow:0 0 18px #d9c46a66}
+.lost h2{color:#ff6d66;text-shadow:0 0 18px #a8282b88}
+
+/* madness */
+.mad .board{animation:mad 9s ease-in-out infinite}
+@keyframes mad{0%,100%{filter:none;transform:none}30%{filter:hue-rotate(-14deg) saturate(1.3)}33%{transform:translateX(1.5px) skewX(.3deg)}35%{transform:none}70%{filter:blur(.4px) hue-rotate(10deg)}}
+.shake{animation:shake .45s}
+@keyframes shake{0%,100%{transform:none}20%{transform:translate(-5px,2px)}40%{transform:translate(4px,-3px)}60%{transform:translate(-3px,1px)}80%{transform:translate(2px,2px)}}
+
+/* ---------- modal ---------- */
+.mback{position:fixed;inset:0;background:rgba(5,3,2,.78);display:flex;align-items:center;justify-content:center;z-index:100;padding:18px;animation:fade .2s;backdrop-filter:blur(2px)}
+@keyframes fade{from{opacity:0}}
+.modal{background:linear-gradient(180deg,#221a15,#15100d);border:1px solid var(--line2);border-radius:12px;max-width:520px;width:100%;padding:22px;max-height:88vh;overflow:auto;box-shadow:0 20px 70px #000}
+.modal h2{font-size:28px;margin:4px 0 10px}
+.modal .flav{font-family:'IM Fell English',serif;font-style:italic;color:var(--dim);font-size:18px}
+.modal ul{padding-left:18px;margin:10px 0}
+.modal li{margin:5px 0}
+.modal .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.myth h2{color:#c9bdf5}
+.dice{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;margin:18px 0 12px}
+.die{width:50px;height:50px;border-radius:9px;background:#e8dcc4;color:#2a1d14;display:grid;place-items:center;font-size:27px;box-shadow:0 3px 0 #7a6a52, inset 0 0 8px #0002}
+.die.rolling{animation:tumble .14s linear infinite}
+@keyframes tumble{0%{transform:rotate(0)}50%{transform:rotate(12deg) translateY(-3px)}100%{transform:rotate(0)}}
+.die.S,.die.C,.die.IS{background:linear-gradient(#f3c66c,#d3962f);color:#3b1f00;box-shadow:0 3px 0 #7a4f12,0 0 14px #e2a94b77}
+.die.I{background:linear-gradient(#9dabeb,#5c6cbd);color:#fff;box-shadow:0 3px 0 #333f7f}
+.die.C{outline:2px solid #9dabeb;outline-offset:2px}
+.die.B{opacity:.55}
+.dsum{text-align:center;font-size:19px}
+.dsum .pass{color:var(--good)}.dsum .fail{color:#ff7c72}
+.toasts{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:min(92vw,520px)}
+.toast{background:#211913;border:1px solid var(--line2);border-radius:8px;padding:10px 14px;box-shadow:0 8px 30px #000;animation:fade .2s;font-size:15.5px;text-align:center}
+.rules h3{font-size:19px;margin-top:14px;color:var(--candle)}
+.rules p{margin:6px 0}
+.code{font-family:'IM Fell English SC',serif;font-size:44px;letter-spacing:.18em;color:var(--candle)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toasts" id="toasts"></div>
+<script src="peerjs.min.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   ASHGROVE HOUSE — a cooperative, turn-based investigation horror game
+   ===================================================================== */
+
+// ---------------------------------------------------------------- data
+const STAT_NAMES = {str:'Strength', agi:'Agility', lore:'Lore', obs:'Observation', will:'Will'};
+const STAT_SHORT = {str:'STR', agi:'AGI', lore:'LOR', obs:'OBS', will:'WIL'};
+
+const INVESTIGATORS = [
+  {id:'mara', name:'Mara Voss', role:'Night nurse', color:'#7fc0ae', hp:7, san:7, str:2, agi:3, lore:2, obs:3, will:3, start:['bandages'],
+   ability:'Field Medic', text:'Action: restore 1 Health to yourself or someone in your room. Your Bandages restore 1 extra.'},
+  {id:'elias', name:'Elias Crane', role:'Antiquarian', color:'#d2ad62', hp:6, san:8, str:2, agi:2, lore:4, obs:3, will:3, start:['journal'],
+   ability:'Erudite', text:'On Lore tests, your blank dice are rerolled once.'},
+  {id:'dex', name:'Dex Holloway', role:'Ex-prizefighter', color:'#d07352', hp:9, san:5, str:4, agi:3, lore:1, obs:2, will:2, start:['knife'],
+   ability:'Brawler', text:'Your attacks that land deal 1 extra damage.'},
+  {id:'agnes', name:'Sister Agnes', role:'Lapsed nun', color:'#a597d6', hp:6, san:8, str:2, agi:2, lore:3, obs:2, will:4, start:['holywater'],
+   ability:'Faith', text:'You lose 1 less Sanity from every source of horror.'},
+  {id:'juno', name:'Juno Reyes', role:'Photojournalist', color:'#dccf72', hp:7, san:6, str:2, agi:4, lore:2, obs:4, will:2, start:['lantern'],
+   ability:'Keen Eye', text:'When you search, ◉ results count as successes.'},
+];
+const INVD = id => INVESTIGATORS.find(x => x.id === id);
+
+const ITEMS = {
+  revolver:{n:'Old Revolver', t:'+2 attack dice while it has shots (3 per box of rounds).'},
+  knife:{n:'Carving Knife', t:'+1 attack die.'},
+  poker:{n:'Fire Poker', t:'+1 attack die.'},
+  lantern:{n:'Storm Lantern', t:'+1 die when searching, and darkness cannot touch you.'},
+  journal:{n:'Annotated Journal', t:'+1 die on Lore tests.'},
+  bandages:{n:'Bandages', t:'Action: restore 2 Health to someone in your room.'},
+  laudanum:{n:'Laudanum', t:'Action: restore 2 Sanity to someone in your room.'},
+  holywater:{n:'Holy Water', t:'Action: deal 3 damage to a creature in your room.'},
+  ironkey:{n:'Iron Key', t:'Unlocks the cellar door in the Kitchen.'},
+};
+const USABLE = ['bandages','laudanum','holywater'];
+
+const ROOMS = {
+  study:   {n:'Study',          x:0,y:0, d:'Ledgers stacked to the ceiling. The last page lists the guests — every name struck out but one.'},
+  gallery: {n:'Upper Gallery',  x:1,y:0, d:'Portraits of the Ashgrove line. The newest frame is empty, and the nail is still warm.'},
+  bedroom: {n:'Master Bedroom', x:2,y:0, d:'The sheets are turned down. Someone made this bed this morning.'},
+  nursery: {n:'Nursery',        x:3,y:0, d:'A rocking horse still rocks, slower and slower, as you watch.'},
+  library: {n:'Library',        x:0,y:1, d:'Books with no titles on their spines. One lies open on the lectern, waiting.'},
+  hall:    {n:'Grand Hall',     x:1,y:1, d:'A double staircase curls into the dark. The chandelier sways without wind.'},
+  conserv: {n:'Conservatory',   x:2,y:1, dark:true, d:'Glass fogged from the inside. Every plant leans toward you.'},
+  stair:   {n:"Servants' Stair",x:3,y:1, dark:true, d:'A narrow stair for servants who were never meant to be seen.'},
+  parlor:  {n:'Parlor',         x:0,y:2, d:'Chairs arranged in a circle around nothing. The fire was lit for guests.'},
+  foyer:   {n:'Foyer',          x:1,y:2, d:'The front door is gone. There is only wallpaper where it stood.'},
+  dining:  {n:'Dining Room',    x:2,y:2, d:'Thirteen places set. Twelve plates are full, and cold.'},
+  kitchen: {n:'Kitchen',        x:3,y:2, d:'Something still simmers on the stove. It smells of copper.'},
+  crypt:   {n:'Sealed Crypt',   x:2,y:3, dark:true, d:'A bier of white stone. Words are carved around its edge, waiting to be spoken.'},
+  cellar:  {n:'Cellar',         x:3,y:3, dark:true, d:'Black water to the ankles. The walls sweat.'},
+};
+const DOORS = [
+  ['study','library'],['study','gallery'],['gallery','hall'],['gallery','bedroom'],['bedroom','nursery'],
+  ['nursery','stair'],['library','hall'],['library','parlor'],['hall','foyer'],['hall','conserv'],
+  ['conserv','dining'],['stair','kitchen'],['parlor','foyer'],['foyer','dining'],['dining','kitchen'],
+  ['kitchen','cellar','key'],['cellar','crypt','seal'],
+];
+
+const MONSTERS = {
+  crawler:{n:'Crawling Thing', g:'C', hp:2, dmg:1, horror:1, evade:1, speed:2},
+  maid:   {n:'Hollow Maid',    g:'M', hp:3, dmg:2, horror:1, evade:1, speed:1},
+  weeper: {n:'Weeping Thing',  g:'W', hp:4, dmg:1, horror:2, evade:2, speed:1},
+  guest:  {n:'Pale Guest', g:'G', hp:8, dmg:3, horror:3, evade:2, speed:1, boss:true},
+};
+
+const FRAGMENTS = [
+  '“What was invited may be uninvited…”',
+  '“…by those who speak its name and do not look away…”',
+  '“…in the place where it was first laid down.”',
+];
+const RITUAL_NEED = 4; // default; per-game value lives in S.need
+// difficulty by number of investigators — tuned by simulation for ~40% wins with sound play
+const SCALE = {
+  1:{doomMax:15, actions:3, need:4, boss:5},
+  2:{doomMax:14, actions:2, need:5, boss:5},
+  3:{doomMax:11, actions:2, need:6, boss:6},
+  4:{doomMax:10, actions:2, need:7, boss:7},
+};
+const need = S => S.need || RITUAL_NEED;
+
+// --------------------------------------------------------------- utils
+const rnd = n => Math.floor(Math.random() * n);
+const d6 = () => 1 + rnd(6);
+const pick = a => a[rnd(a.length)];
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = (s, el = document) => el.querySelector(s);
+
+// --------------------------------------------------------- rules engine
+const cur = S => S.inv[S.turn];
+const active = S => S.inv.filter(i => !i.out);
+const invAt = (S, r) => S.inv.filter(i => !i.out && i.room === r);
+const monAt = (S, r) => S.monsters.filter(m => m.room === r);
+const nm = inv => INVD(inv.id).name;
+const neighbors = r => DOORS.filter(d => d[0] === r || d[1] === r).map(d => d[0] === r ? d[1] : d[0]);
+const doorBetween = (a, b) => DOORS.find(d => (d[0] === a && d[1] === b) || (d[0] === b && d[1] === a));
+const isOpen = (S, d) => !d[2] || (d[2] === 'key' ? S.flags.keyOpen : S.flags.sealOpen);
+
+function log(S, t, k = '') { S.log.unshift({r: S.round, t, k}); if (S.log.length > 90) S.log.length = 90; }
+
+function newGame(picks) {
+  const n = picks.length;
+  const cfg = SCALE[n] || SCALE[4]; const doomMax = cfg.doomMax;
+  const rooms = {};
+  Object.keys(ROOMS).forEach(r => rooms[r] = {seen: r === 'foyer', pile: []});
+  const eligible = Object.keys(ROOMS).filter(r => !['foyer','cellar','crypt'].includes(r));
+  // the four things you must find go in four different rooms
+  const sp = shuffle(eligible).slice(0, 4);
+  ['fragment','fragment','fragment','ironkey'].forEach((k, i) => rooms[sp[i]].pile.push(k));
+  const commons = shuffle(['revolver','poker','lantern','bandages','bandages','laudanum','holywater','letters','letters','dust']);
+  let ci = 0;
+  shuffle(eligible).forEach(r => { if (!rooms[r].pile.length) rooms[r].pile.push(commons[ci++]); });
+  let guard = 0;
+  while (ci < commons.length && guard++ < 200) {
+    const r = pick(eligible), p = rooms[r].pile;
+    if (p.length < 2) { if (p[0] === 'fragment' || p[0] === 'ironkey') p.splice(Math.random() < .55 ? 1 : 0, 0, commons[ci++]); else p.push(commons[ci++]); }
+  }
+  rooms.cellar.pile = ['holywater', 'letters'];
+  const inv = picks.map(p => {
+    const d = INVD(p.id);
+    return {id: p.id, owner: p.owner, room: 'foyer', hp: d.hp, san: d.san, items: d.start.slice(), clues: 1, ammo: 0, coll: 0, out: false, tome: false};
+  });
+  const S = {v: 1, rev: 1, phase: 'play', round: 1, doom: 0, doomMax, turn: 0, actions: cfg.actions, apt: cfg.actions, need: cfg.need, bossAt: cfg.boss, inv, rooms,
+    monsters: [], mid: 1, fragments: 0, ritual: 0, flags: {keyOpen: false, sealOpen: false, boss: false, surge: false},
+    deck: shuffle(MYTHOS.map((_, i) => i)), log: [], mseq: 0, mythos: null, rseq: 0, roll: null, result: null};
+  log(S, 'The front door closes behind you. Find the three fragments of the Rite, open the crypt, and banish what lives here.', 'myth');
+  log(S, '— Round 1 —', 'round');
+  return S;
+}
+
+function statDice(S, inv, stat, ctx) {
+  const d = INVD(inv.id);
+  let n = d[stat];
+  if (stat === 'lore' && inv.items.includes('journal')) n++;
+  if (ctx === 'search') { if (inv.items.includes('lantern')) n++; else if (ROOMS[inv.room].dark) n--; }
+  if (ctx === 'ritual' && S.monsters.some(m => m.type === 'guest' && m.room === 'crypt')) n--;
+  return n;
+}
+function autoTest(S, inv, stat) {
+  const n = Math.max(1, statDice(S, inv, stat));
+  let dice = Array.from({length: n}, d6);
+  if (stat === 'lore' && inv.id === 'elias') dice = dice.map(v => v <= 3 ? d6() : v);
+  return dice.filter(v => v >= 5).length;
+}
+
+function heal(inv, hp, san) {
+  const d = INVD(inv.id);
+  const a = Math.min(d.hp - inv.hp, hp || 0), b = Math.min(d.san - inv.san, san || 0);
+  inv.hp += a; inv.san += b; return [a, b];
+}
+function hurt(S, inv, amt, why, L) {
+  if (amt <= 0 || inv.out) return;
+  inv.hp = Math.max(0, inv.hp - amt);
+  say(S, L, `${nm(inv)} takes ${amt} damage${why ? ' — ' + why : ''}.`, 'bad');
+  down(S, inv, L);
+}
+function scare(S, inv, amt, why, L) {
+  if (inv.out) return;
+  if (inv.id === 'agnes' && amt > 0) amt -= 1;
+  if (amt <= 0) { say(S, L, `${nm(inv)} holds firm${why ? ' against ' + why : ''}.`); return; }
+  inv.san = Math.max(0, inv.san - amt);
+  say(S, L, `${nm(inv)} loses ${amt} Sanity${why ? ' — ' + why : ''}.`, 'bad');
+  down(S, inv, L);
+}
+function down(S, inv, L) {
+  if (inv.out || (inv.hp > 0 && inv.san > 0)) return;
+  const d = INVD(inv.id);
+  if (!inv.coll) {
+    inv.coll = 1;
+    const what = inv.hp <= 0 ? 'collapses from their wounds' : 'breaks down, screaming';
+    inv.hp = Math.max(inv.hp, Math.ceil(d.hp / 2)); inv.san = Math.max(inv.san, Math.ceil(d.san / 2));
+    S.doom++;
+    say(S, L, `${nm(inv)} ${what}, then staggers back up. The house grows stronger (Doom +1). Next time is the last.`, 'dire');
+  } else {
+    inv.out = true;
+    S.rooms[inv.room].pile.unshift(...inv.items);
+    inv.items = [];
+    say(S, L, `${nm(inv)} is lost to Ashgrove House. Their belongings lie where they fell.`, 'dire');
+    if (!active(S).length) { S.phase = 'lost'; S.result = 'Every investigator has fallen. The house keeps them now, and sets another place at the table.'; }
+  }
+}
+function say(S, L, t, k) { log(S, t, k); if (L) L.push({t, k}); }
+
+function spawn(S, type, room) {
+  if (S.monsters.length >= 6 && type !== 'guest') { S.doom++; return `The house is crowded with horrors. Doom +1.`; }
+  if (!room) {
+    const seen = Object.keys(S.rooms).filter(r => S.rooms[r].seen && r !== 'crypt');
+    const empty = seen.filter(r => !invAt(S, r).length);
+    room = pick(empty.length ? empty : seen);
+  }
+  S.monsters.push({mid: S.mid++, type, room, hp: MONSTERS[type].hp});
+  if (type === 'guest') S.flags.boss = true;
+  return `${MONSTERS[type].n} appears in the ${ROOMS[room].n}.`;
+}
+function stepToward(S, from) {
+  const targets = new Set(active(S).map(i => i.room));
+  if (targets.has(from)) return null;
+  const prev = {[from]: null}, q = [from];
+  while (q.length) {
+    const r = q.shift();
+    for (const n of neighbors(r)) {
+      if (n in prev || !isOpen(S, doorBetween(r, n))) continue;
+      prev[n] = r;
+      if (targets.has(n)) { let c = n; while (prev[c] !== from) c = prev[c]; return c; }
+      q.push(n);
+    }
+  }
+  return null;
+}
+function damageMonster(S, m, dmg, who) {
+  const M = MONSTERS[m.type];
+  if (dmg <= 0) { log(S, `${who}, but the ${M.n} is untouched.`); return; }
+  m.hp -= dmg;
+  if (m.hp <= 0) {
+    S.monsters = S.monsters.filter(x => x.mid !== m.mid);
+    if (m.type === 'guest') {
+      S.flags.guestDead = true;
+      S.doom = Math.max(0, S.doom - 2);
+      log(S, `${who} — the Pale Guest comes apart like wet paper. The house shudders (Doom −2).`, 'good');
+    } else log(S, `${who} for ${dmg}. The ${M.n} is destroyed.`, 'good');
+  } else log(S, `${who} for ${dmg}. The ${M.n} has ${m.hp} left.`);
+}
+
+const MYTHOS = [
+  {t:'The Lights Gutter', f:'Every flame in the house leans the same way, then dies.', fx:(S,L)=>{
+    const v = active(S).filter(i => ROOMS[i.room].dark && !i.items.includes('lantern'));
+    if (!v.length) say(S, L, 'No one is caught in the dark this time.');
+    v.forEach(i => scare(S, i, 1, 'alone in the dark', L)); }},
+  {t:'Scratching Below', f:'Nails on the underside of the floorboards.', fx:(S,L)=>say(S, L, spawn(S,'crawler'), 'bad')},
+  {t:'A Woman Humming', f:'A lullaby, one room over. Always one room over.', fx:(S,L)=>say(S, L, spawn(S,'maid'), 'bad')},
+  {t:'Stopped Clocks', f:'Every clock in Ashgrove reads 3:17.', fx:(S,L)=>{ S.doom++; say(S, L, 'Doom +1.', 'bad'); }},
+  {t:'A Late Reflection', f:'Your reflection blinks a moment after you do.', fx:(S,L)=>{
+    active(S).forEach(i => { if (autoTest(S, i, 'will') < 1) scare(S, i, 1, 'the mirror', L); else say(S, L, `${nm(i)} looks away in time.`); }); }},
+  {t:'Something Falls', f:'A chain snaps somewhere above you.', fx:(S,L)=>{
+    const i = pick(active(S)); if (autoTest(S, i, 'agi') < 1) hurt(S, i, 2, 'struck by falling plaster', L); else say(S, L, `${nm(i)} throws themself clear.`); }},
+  {t:'Weeping in the Walls', f:'Someone is crying inside the plaster.', fx:(S,L)=>say(S, L, spawn(S, S.round >= 3 ? 'weeper' : 'crawler'), 'bad')},
+  {t:'A Held Breath', f:'For one moment the house is silent. You remember who you are.', fx:(S,L)=>{
+    active(S).forEach(i => heal(i, 0, 1)); say(S, L, 'Everyone regains 1 Sanity.', 'good'); }},
+  {t:'Cold Hands', f:'Fingers rest on your shoulder. No one is behind you.', fx:(S,L)=>{
+    const i = active(S).slice().sort((a,b) => a.san - b.san)[0]; scare(S, i, 1, 'the cold hands', L); }},
+  {t:'The House Shifts', f:'The corridors are longer than they were.', fx:(S,L)=>{ S.flags.surge = true; say(S, L, 'Creatures move one extra room this night.', 'bad'); }},
+  {t:'A Letter Under the Door', f:'The ink is still wet: “it wants the last one to stay.”', fx:(S,L)=>{
+    const i = pick(active(S)); i.clues++; say(S, L, `${nm(i)} gains 1 Clue.`, 'clue'); }},
+  {t:'Blood From the Ceiling', f:'It drips in a slow, deliberate rhythm.', fx:(S,L)=>{
+    const alone = active(S).filter(i => invAt(S, i.room).length === 1);
+    if (!alone.length) say(S, L, 'Together, you keep your nerve.');
+    alone.forEach(i => scare(S, i, 1, 'alone with it', L)); }},
+  {t:'The Guest Stirs', f:'Upstairs, a mattress creaks under a weight that isn’t there.', fx:(S,L)=>{
+    if (S.flags.boss && S.monsters.some(m => m.type === 'guest')) { S.flags.surge = true; say(S, L, 'Creatures move one extra room this night.', 'bad'); }
+    else { S.doom++; say(S, L, 'Doom +1.', 'bad'); } }},
+  {t:'A Distant Bell', f:'A church bell, miles away, tolls once. It sounds like hope.', fx:(S,L)=>{
+    active(S).forEach(i => heal(i, 1, 0)); say(S, L, 'Everyone restores 1 Health.', 'good'); }},
+  {t:'Your Name, Fondly', f:'The house says one of your names, the way a mother would.', fx:(S,L)=>{
+    const i = pick(active(S));
+    if (autoTest(S, i, 'will') < 1) scare(S, i, 2, 'it knows them', L); else { i.clues++; say(S, L, `${nm(i)} answers back, and learns something (+1 Clue).`, 'clue'); } }},
+];
+
+function mythos(S) {
+  const L = [];
+  S.doom++;
+  if (!S.deck.length) S.deck = shuffle(MYTHOS.map((_, i) => i));
+  const card = MYTHOS[S.deck.pop()];
+  log(S, `Mythos: ${card.t}. ${card.f}`, 'myth');
+  card.fx(S, L);
+  if (!S.flags.boss && S.doom >= S.doomMax - (S.bossAt || 5)) {
+    say(S, L, 'The Pale Guest has come down to greet you. It is in the Grand Hall.', 'dire');
+    spawn(S, 'guest', 'hall');
+  }
+  // creatures move & attack
+  const surge = S.flags.surge; S.flags.surge = false;
+  for (const m of S.monsters.slice()) {
+    if (S.phase !== 'play') break;
+    const M = MONSTERS[m.type];
+    const start = m.room;
+    for (let s = 0; s < M.speed + (surge ? 1 : 0); s++) { const nx = stepToward(S, m.room); if (!nx) break; m.room = nx; }
+    if (m.room !== start && S.rooms[m.room].seen) say(S, L, `The ${M.n} moves into the ${ROOMS[m.room].n}.`);
+    const here = invAt(S, m.room);
+    if (here.length) {
+      const tgt = here.slice().sort((a, b) => a.hp - b.hp)[0];
+      const def = autoTest(S, tgt, 'agi');
+      const dmg = Math.max(0, M.dmg - def);
+      if (dmg) hurt(S, tgt, dmg, `the ${M.n} attacks (dodged ${def})`, L);
+      else say(S, L, `The ${M.n} lunges at ${nm(tgt)}, who twists away.`);
+    }
+  }
+  // horror
+  for (const inv of active(S)) {
+    if (S.phase !== 'play') break;
+    const ms = monAt(S, inv.room); if (!ms.length) continue;
+    const hz = Math.max(...ms.map(m => MONSTERS[m.type].horror));
+    const w = autoTest(S, inv, 'will');
+    const loss = Math.max(0, hz - w);
+    if (loss) scare(S, inv, loss, 'what shares the room with them', L);
+    else say(S, L, `${nm(inv)} stares the horror down.`);
+  }
+  if (S.phase === 'play' && S.doom >= S.doomMax) {
+    S.phase = 'lost';
+    S.result = 'The clocks strike 3:17 one final time. The Pale Guest takes its place at the head of the table, and the house has its family again.';
+    log(S, 'Doom has reached its end.', 'dire');
+  }
+  L.unshift({t: `The clocks advance. Doom ${Math.min(S.doom, S.doomMax)} of ${S.doomMax}.`, k: 'bad'});
+  S.mseq++;
+  S.mythos = {round: S.round, t: card.t, f: card.f, lines: L};
+}
+
+function endTurn(D) {
+  let i = D.turn + 1;
+  while (i < D.inv.length && D.inv[i].out) i++;
+  if (i >= D.inv.length) {
+    mythos(D);
+    if (D.phase !== 'play') return;
+    D.round++;
+    i = D.inv.findIndex(x => !x.out);
+    if (i < 0) { D.phase = 'lost'; return; }
+    log(D, `— Round ${D.round} —`, 'round');
+  }
+  D.turn = i; D.actions = D.apt || 2;
+}
+function checkWin(D) {
+  if (D.phase === 'play' && D.ritual >= need(D)) {
+    D.phase = 'won';
+    D.result = 'The last word of the Rite leaves your mouths and the house exhales. Doors appear where there were none. Somewhere upstairs, Lydia Ashgrove is crying — the ordinary, living kind.';
+    log(D, 'The Banishing is complete.', 'good');
+  }
+}
+
+// ------------------------------------------------------------ actions
+function gain(D, inv, k) {
+  const room = ROOMS[inv.room].n;
+  if (k === 'dust') { log(D, `${nm(inv)} searches the ${room}: only dust and mouse bones.`); return; }
+  if (k === 'fragment') {
+    D.fragments++;
+    log(D, `${nm(inv)} finds a Fragment of the Rite (${D.fragments}/3): ${FRAGMENTS[D.fragments - 1]}`, 'clue');
+    toast(`Fragment of the Rite found (${D.fragments}/3)`);
+    if (D.fragments === 3) log(D, 'With all three fragments, the seal in the Cellar can be broken.', 'clue');
+    return;
+  }
+  if (k === 'letters') { inv.clues += 2; log(D, `${nm(inv)} finds a bundle of letters and pieces things together (+2 Clues).`, 'clue'); return; }
+  if (k === 'revolver') {
+    inv.ammo += 3;
+    if (!inv.items.includes('revolver')) inv.items.push('revolver');
+    log(D, `${nm(inv)} finds an Old Revolver, loaded with 3 rounds.`, 'good'); return;
+  }
+  inv.items.push(k);
+  log(D, `${nm(inv)} finds ${ITEMS[k].n}.`, k === 'ironkey' ? 'clue' : 'good');
+  if (k === 'ironkey') toast('The Iron Key — it fits the cellar door in the Kitchen.');
+}
+
+async function reveal(D, inv, r) {
+  if (r === 'gallery') { inv.clues++; log(D, 'One portrait is newer than the rest. Beneath it, a name you recognise (+1 Clue).', 'clue'); }
+  else if (r === 'bedroom') log(D, 'Someone is sitting on the bed, facing the wall. ' + spawn(D, 'maid', 'bedroom'), 'bad');
+  else if (r === 'conserv') log(D, 'Something unfolds from beneath the ferns. ' + spawn(D, 'crawler', 'conserv'), 'bad');
+  else if (r === 'cellar') log(D, 'Something moves under the black water. ' + spawn(D, 'crawler', 'cellar'), 'bad');
+  else if (r === 'nursery') {
+    const s = await rollTest(D, inv, 'will', {label: 'The rocking horse', need: 1});
+    if (s < 1) scare(D, inv, 1, 'the child’s laughter'); else log(D, `${nm(inv)} steadies the rocking horse with a trembling hand.`);
+  } else if (r === 'stair') {
+    const s = await rollTest(D, inv, 'agi', {label: 'A rotten step', need: 1});
+    if (s < 1) hurt(D, inv, 1, 'a step gives way'); else log(D, `${nm(inv)} catches the banister as a step gives way.`);
+  } else if (r === 'crypt') {
+    if (!D.monsters.some(m => m.type === 'guest')) {
+      if (!D.flags.boss) log(D, 'The lid of the bier slides aside. The Pale Guest sits up.', 'dire');
+      else log(D, 'The Pale Guest is already here, waiting for you.', 'dire');
+      D.monsters = D.monsters.filter(m => m.type !== 'guest');
+      if (!D.flags.guestDead) spawn(D, 'guest', 'crypt');
+    }
+    log(D, `Speak the Rite here: ${need(D)} successes on Lore tests will banish it.`, 'clue');
+  }
+}
+
+const ACT = {
+  async move(D, inv, to) {
+    const d = doorBetween(inv.room, to);
+    if (!d) return false;
+    if (!isOpen(D, d)) {
+      if (d[2] === 'key') {
+        if (!inv.items.includes('ironkey')) { toast('The cellar door is locked. An iron key might open it.'); return false; }
+        D.flags.keyOpen = true; log(D, `${nm(inv)} turns the Iron Key. The cellar door groans open.`, 'good');
+      } else {
+        if (D.fragments < 3) { toast(`The crypt is sealed. You need all three Fragments of the Rite (${D.fragments}/3).`); return false; }
+        D.flags.sealOpen = true; log(D, `${nm(inv)} reads the three fragments aloud. The seal on the crypt cracks.`, 'good');
+      }
+    }
+    const ms = monAt(D, inv.room);
+    if (ms.length) {
+      const need = Math.max(...ms.map(m => MONSTERS[m.type].evade));
+      const s = await rollTest(D, inv, 'agi', {label: `Evade to leave (need ${need})`, need});
+      if (s < need) {
+        const w = ms.reduce((a, b) => MONSTERS[a.type].dmg >= MONSTERS[b.type].dmg ? a : b);
+        hurt(D, inv, MONSTERS[w.type].dmg, `the ${MONSTERS[w.type].n} blocks the way`);
+        return true;
+      }
+      log(D, `${nm(inv)} slips past.`);
+    }
+    inv.room = to;
+    log(D, `${nm(inv)} enters the ${ROOMS[to].n}.`);
+    if (!D.rooms[to].seen) { D.rooms[to].seen = true; await reveal(D, inv, to); }
+    return true;
+  },
+  async search(D, inv) {
+    const rs = D.rooms[inv.room];
+    if (!rs.pile.length) return false;
+    const s = await rollTest(D, inv, 'obs', {label: `Search the ${ROOMS[inv.room].n}`, ctx: 'search', need: 1, insight: inv.id === 'juno'});
+    if (s < 1) { log(D, `${nm(inv)} searches the ${ROOMS[inv.room].n} but finds nothing yet.`); return true; }
+    for (let k = 0; k < Math.min(2, s) && rs.pile.length; k++) gain(D, inv, rs.pile.shift());
+    return true;
+  },
+  async attack(D, inv, mid) {
+    const m = D.monsters.find(x => x.mid == mid && x.room === inv.room);
+    if (!m) return false;
+    let bonus = 0, w = 'bare fists';
+    if (inv.items.includes('revolver') && inv.ammo > 0) { bonus = 2; w = 'the revolver'; }
+    else if (inv.items.includes('knife')) { bonus = 1; w = 'the knife'; }
+    else if (inv.items.includes('poker')) { bonus = 1; w = 'the poker'; }
+    const s = await rollTest(D, inv, 'str', {label: `Attack the ${MONSTERS[m.type].n} with ${w}`, bonus});
+    if (w === 'the revolver') inv.ammo--;
+    const dmg = s > 0 && inv.id === 'dex' ? s + 1 : s;
+    damageMonster(D, m, dmg, `${nm(inv)} attacks with ${w}`);
+    return true;
+  },
+  async use(D, inv, k) {
+    const idx = inv.items.indexOf(k); if (idx < 0) return false;
+    if (k === 'holywater') {
+      const ms = monAt(D, inv.room); if (!ms.length) { toast('There is nothing here to use it on.'); return false; }
+      const m = ms.length === 1 ? ms[0] : await chooseMonster(ms, 'Throw the holy water at…');
+      if (!m) return false;
+      inv.items.splice(idx, 1);
+      damageMonster(D, D.monsters.find(x => x.mid === m.mid), 3, `${nm(inv)} hurls holy water`);
+      return true;
+    }
+    const field = k === 'bandages' ? 'hp' : 'san';
+    const amt = k === 'bandages' ? (inv.id === 'mara' ? 3 : 2) : 2;
+    const t = await chooseAlly(D, inv, field, `${ITEMS[k].n}: who needs it?`);
+    if (!t) return false;
+    inv.items.splice(idx, 1);
+    const [a, b] = field === 'hp' ? heal(t, amt, 0) : heal(t, 0, amt);
+    log(D, `${nm(inv)} uses ${ITEMS[k].n} on ${t === inv ? 'themself' : nm(t)} (+${a || b} ${field === 'hp' ? 'Health' : 'Sanity'}).`, 'good');
+    return true;
+  },
+  async aid(D, inv) {
+    const t = await chooseAlly(D, inv, 'hp', 'Field Medic: who do you tend to?');
+    if (!t) return false;
+    const [a] = heal(t, 1, 0);
+    log(D, `${nm(inv)} patches up ${t === inv ? 'her own wounds' : nm(t)} (+${a} Health).`, 'good');
+    return true;
+  },
+  async compose(D, inv) {
+    const s = await rollTest(D, inv, 'will', {label: 'Compose yourself'});
+    const [, b] = heal(inv, 0, Math.min(2, s));
+    log(D, b ? `${nm(inv)} steadies their breathing (+${b} Sanity).` : `${nm(inv)} cannot stop their hands from shaking.`, b ? 'good' : '');
+    return true;
+  },
+  async tome(D, inv) {
+    inv.tome = true;
+    const s = await rollTest(D, inv, 'lore', {label: 'Read the open book'});
+    if (s >= 2) { inv.clues += 2; log(D, `${nm(inv)} reads the book and understands far too much (+2 Clues).`, 'clue'); }
+    else if (s === 1) { inv.clues += 1; log(D, `${nm(inv)} makes out a few lines (+1 Clue).`, 'clue'); }
+    else scare(D, inv, 1, 'the words read them back');
+    return true;
+  },
+  async ritual(D, inv) {
+    const s = await rollTest(D, inv, 'lore', {label: 'Speak the Rite', ctx: 'ritual'});
+    D.ritual = Math.min(need(D), D.ritual + s);
+    log(D, s ? `${nm(inv)} speaks the Rite. The crypt trembles (${D.ritual}/${need(D)}).` : `${nm(inv)}'s voice falters. The words won't come.`, s ? 'good' : 'bad');
+    return true;
+  },
+  async give(D, inv) {
+    const others = invAt(D, inv.room).filter(o => o !== inv);
+    const opts = [];
+    inv.items.forEach(k => others.forEach(o => opts.push({label: `${ITEMS[k].n} → ${nm(o)}`, v: {k, to: o.id}})));
+    if (inv.clues > 0) others.forEach(o => opts.push({label: `1 Clue → ${nm(o)}`, v: {k: 'clue', to: o.id}}));
+    const c = await choose('Hand something over', opts, 'Trading is free and does not use an action.');
+    if (!c) return false;
+    const o = D.inv.find(x => x.id === c.to);
+    if (c.k === 'clue') { inv.clues--; o.clues++; }
+    else {
+      inv.items.splice(inv.items.indexOf(c.k), 1);
+      if (c.k === 'revolver') { o.ammo += inv.ammo; inv.ammo = 0; if (!o.items.includes('revolver')) o.items.push('revolver'); }
+      else o.items.push(c.k);
+    }
+    log(D, `${nm(inv)} hands ${c.k === 'clue' ? 'a Clue' : ITEMS[c.k].n} to ${nm(o)}.`);
+    return 'free';
+  },
+  async end(D) { D.actions = 0; return 'free'; },
+};
+
+// ---------------------------------------------------- app state & sync
+const G = {screen: 'home', mode: null, S: null, db: null, user: null, me: null, code: null, subs: [], seats: [], lobby: null,
+  names: {}, busy: false, seenM: null, seenR: null, seenEnd: null, myRolls: new Set(), capsReady: false, localPicks: [], homeLists: {open: [], mine: []}};
+
+function canAct() {
+  const S = G.S;
+  if (!S || S.phase !== 'play' || G.busy) return false;
+  if (G.mode === 'local') return true;
+  return cur(S).owner === G.me;
+}
+function clearSubs() { G.subs.forEach(u => { try { u(); } catch (e) {} }); G.subs = []; }
+
+async function doAction(kind, arg) {
+  if (!canAct()) return;
+  G.busy = true; render();
+  let committed = false;
+  try {
+    const D = clone(G.S);
+    const inv = cur(D);
+    const res = await ACT[kind](D, inv, arg);
+    if (res === false) return;
+    if (res !== 'free') D.actions--;
+    checkWin(D);
+    if (D.phase === 'play' && (cur(D).out || D.actions <= 0)) endTurn(D);
+    G.busy = false; committed = true;
+    await commit(D);
+  } catch (e) {
+    console.error(e); toast('Something went wrong: ' + (e && e.message || e));
+  } finally {
+    G.busy = false;
+    if (!committed) render();
+  }
+}
+
+async function commit(D) {
+  D.rev = (G.S && G.S.rev || 0) + 1;
+  if (D.roll) G.myRolls.add(D.roll.seq);
+  if (G.mode === 'local') { saveLocal(D); onState(D); return; }
+  if (G.net && G.net.role === 'host') { hostAccept(D); return; }
+  const prev = G.S;
+  if (!send(G.net && G.net.conn, {t: 'commit', S: D})) { toast('Not connected to the host, so that move was not sent. Try again in a moment.'); onState(prev, true); return; }
+  onState(D);
+}
+
+function onState(S, force) {
+  if (!force && G.S && S.rev < G.S.rev) return;
+  G.S = S; G.screen = 'game';
+  if (G.seenM == null) { G.seenM = S.mseq; G.seenR = S.rseq; G.seenEnd = S.phase !== 'play' ? S.phase : null; }
+  render();
+  if (S.rseq > G.seenR) { G.seenR = S.rseq; if (S.roll && !G.myRolls.has(S.roll.seq) && G.mode === 'online') rollToast(S.roll); }
+  const showEnd = () => { if (S.phase !== 'play' && G.seenEnd !== S.phase) { G.seenEnd = S.phase; showEnding(S); } };
+  if (S.mseq > G.seenM) { G.seenM = S.mseq; showMythos(S.mythos).then(showEnd); }
+  else showEnd();
+  resolveNames(S.inv.map(i => i.owner));
+}
+
+function saveLocal(S) { try { localStorage.setItem('ashgrove-local', JSON.stringify(S)); } catch (e) {} }
+function loadLocal() { try { const s = localStorage.getItem('ashgrove-local'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+
+// ------------------------------------------- peer-to-peer online play (PeerJS)
+const PEER_PREFIX = 'ashgrove-house-v1-';
+function genCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += a[rnd(a.length)]; return s; }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+function myId() { let id = lsGet('ag-pid'); if (!id) { id = 'p' + Math.random().toString(36).slice(2, 12); lsSet('ag-pid', id); } return id; }
+const myName = () => lsGet('ag-name') || '';
+G.me = myId();
+const pname = id => {
+  if (id === 'local') return '';
+  if (id === G.me) return 'You';
+  const fromS = G.S && G.S.names && G.S.names[id];
+  const fromL = G.lobby && (G.lobby.seats || []).find(s => s.uid === id);
+  return fromS || (fromL && fromL.name) || 'A player';
+};
+function resolveNames() {}
+function watchHomeLists() {}
+function initCaps() {
+  G.capsReady = true;
+  const q = new URLSearchParams(location.search).get('join');
+  if (q) { history.replaceState(null, '', location.pathname); joinGame(q); }
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+function nameModal() {
+  return new Promise(res => {
+    const m = openModal(`<h2>What should we call you?</h2><p class="dim">Other players see this name.</p>
+      <input id="nm-in" maxlength="24" style="width:100%;text-transform:none;letter-spacing:normal" autocomplete="nickname">
+      <div class="btns"><button class="ghost" data-x="no">Cancel</button><button class="primary" data-x="ok">Continue</button></div>`);
+    const inp = $('#nm-in', m); setTimeout(() => inp.focus(), 50);
+    const done = ok => { const v = inp.value.trim(); if (ok && !v) { inp.focus(); return; } m.remove(); res(ok ? v : null); };
+    m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (b) done(b.dataset.x === 'ok'); });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); });
+  });
+}
+async function ensureName() {
+  let n = ($('#pname') && $('#pname').value.trim()) || myName();
+  if (!n) n = await nameModal();
+  if (n) lsSet('ag-name', n.slice(0, 24));
+  return n;
+}
+function peerReady() { if (typeof Peer === 'undefined') { toast('Online play could not load. Check your internet connection and reload.'); return false; } return true; }
+function setLoad(t) { const el = $('#loadmsg'); if (el) el.textContent = t; }
+function send(conn, msg) { try { if (conn && conn.open) { conn.send(msg); return true; } } catch (e) {} return false; }
+function broadcast(msg) { if (G.net && G.net.conns) G.net.conns.forEach(c => send(c, msg)); }
+function netStatus(t) {
+  if (t != null) G.netText = t;
+  else if (G.net && G.net.role === 'host') { const n = G.net.conns.size; G.netText = `Hosting game ${G.code} · ${n} other player${n === 1 ? '' : 's'} connected · keep this screen open`; }
+  else if (G.net && G.net.role === 'client') G.netText = `Connected to game ${G.code}`;
+  const el = $('#net'); if (el) el.textContent = G.netText || '';
+}
+async function wakeLock() { try { if (navigator.wakeLock) G.wl = await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && G.net && G.net.role === 'host') wakeLock(); });
+function resetOnline(code) {
+  clearSubs();
+  G.mode = 'online'; G.code = code; G.S = null; G.lobby = null; G.seats = []; G.seenM = null; G.seenEnd = null; G.myRolls = new Set(); G.netText = '';
+}
+
+// host ------------------------------------------------------------------
+async function hostGame(resumeState) {
+  if (!peerReady()) return;
+  const name = await ensureName(); if (!name) return;
+  resetOnline(resumeState ? resumeState.code : genCode());
+  G.net = {role: 'host', conns: new Map(), peer: null};
+  G.screen = 'loading'; render(); setLoad('Opening the house…');
+  startHostPeer(G.code, resumeState || null, 0);
+}
+function startHostPeer(code, resumeState, tries) {
+  G.code = code;
+  const peer = new Peer(PEER_PREFIX + code, {debug: 0});
+  G.net.peer = peer;
+  let opened = false;
+  peer.on('open', () => {
+    opened = true;
+    if (G.S) { /* reconnect after a drop */ }
+    else if (resumeState) onState(resumeState, true);
+    else if (!G.lobby) { G.lobby = {code, host: G.me, created: Date.now(), seats: [{uid: G.me, name: myName(), joined: Date.now(), picks: []}]}; G.seats = G.lobby.seats; G.screen = 'lobby'; render(); }
+    netStatus(); wakeLock();
+  });
+  peer.on('connection', conn => {
+    conn.on('data', msg => { try { hostHandle(conn, msg); } catch (e) { console.error(e); } });
+    conn.on('close', () => { if (conn.pid && G.net && G.net.conns.get(conn.pid) === conn) { G.net.conns.delete(conn.pid); netStatus(); } });
+  });
+  peer.on('disconnected', () => { setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500); });
+  peer.on('error', err => {
+    if (err.type === 'unavailable-id') {
+      try { peer.destroy(); } catch (e) {}
+      if (resumeState && tries < 10) { setLoad('Reclaiming your game code… (this can take a few seconds)'); setTimeout(() => startHostPeer(code, resumeState, tries + 1), 3000); }
+      else if (!resumeState) startHostPeer(genCode(), null, 0);
+      else { toast('Could not reclaim that game code. Try again in a minute.'); goHome(); }
+    } else if (!opened && ['network', 'server-error', 'socket-error', 'browser-incompatible'].includes(err.type)) {
+      toast(err.type === 'browser-incompatible' ? 'This browser cannot host online games. Try Chrome, Edge or Safari.' : 'Could not reach the matchmaking server. Check your connection.');
+      goHome();
+    }
+  });
+  G.subs.push(() => { try { peer.destroy(); } catch (e) {} });
+}
+function sameOwners(a, b) { return a.inv.length === b.inv.length && a.inv.every((x, i) => x.owner === b.inv[i].owner && x.id === b.inv[i].id); }
+function hostHandle(conn, msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.t === 'hello') {
+    const pid = String(msg.pid || '').slice(0, 40), name = String(msg.name || 'Player').slice(0, 24);
+    if (!pid || pid === G.me) return;
+    conn.pid = pid;
+    const old = G.net.conns.get(pid); if (old && old !== conn) { try { old.close(); } catch (e) {} }
+    G.net.conns.set(pid, conn);
+    if (G.S) {
+      if (!G.S.names) G.S.names = {};
+      if (G.S.names[pid] !== name) { G.S.names[pid] = name; saveHost(G.S); broadcast({t: 'state', S: G.S, force: true}); render(); }
+      else send(conn, {t: 'state', S: G.S, force: true});
+    } else if (G.lobby) {
+      const s = G.lobby.seats.find(x => x.uid === pid);
+      if (!s) G.lobby.seats.push({uid: pid, name, joined: Date.now(), picks: []}); else s.name = name;
+      G.seats = G.lobby.seats; broadcast({t: 'lobby', L: G.lobby}); render();
+    }
+    netStatus(); return;
+  }
+  const pid = conn.pid; if (!pid) return;
+  if (msg.t === 'picks' && G.lobby && !G.S) {
+    const s = G.lobby.seats.find(x => x.uid === pid); if (!s) return;
+    s.picks = (Array.isArray(msg.picks) ? msg.picks : []).filter(id => INVD(id)).slice(0, 4);
+    broadcast({t: 'lobby', L: G.lobby}); render();
+  } else if (msg.t === 'commit' && G.S) {
+    const S = msg.S;
+    if (S && Array.isArray(S.inv) && S.rooms && G.S.phase === 'play' && S.rev === G.S.rev + 1 && cur(G.S).owner === pid && sameOwners(S, G.S)) hostAccept(S);
+    else send(conn, {t: 'state', S: G.S, force: true, err: 'That move crossed with another one, so the board was refreshed. Try again.'});
+  }
+}
+function hostAccept(S) { saveHost(S); onState(S, true); broadcast({t: 'state', S}); }
+function saveHost(S) { lsSet('ag-host', JSON.stringify(S)); }
+function loadHost() { try { const s = lsGet('ag-host'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+
+// client ----------------------------------------------------------------
+async function joinGame(code) {
+  code = String(code || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,8}$/.test(code)) { toast('Enter the 5-letter code your host shared.'); return; }
+  if (!peerReady()) return;
+  const name = await ensureName(); if (!name) return;
+  resetOnline(code);
+  lsSet('ag-recent', code);
+  G.net = {role: 'client', peer: null, conn: null, tries: 0, alive: true, timer: null};
+  G.screen = 'loading'; render(); setLoad('Knocking on the door…');
+  const peer = new Peer({debug: 0});
+  G.net.peer = peer;
+  peer.on('open', () => connectHost());
+  peer.on('disconnected', () => { setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500); });
+  peer.on('error', err => {
+    if (err.type === 'peer-unavailable') {
+      if (!G.S && !G.lobby && G.net.tries === 0) { toast('No game is open with that code. Check it, and make sure the host still has the game on screen.'); goHome(); }
+      else scheduleReconnect();
+    } else if (['network', 'server-error', 'socket-error'].includes(err.type)) { netStatus('Connection trouble — retrying…'); scheduleReconnect(); }
+    else if (err.type === 'browser-incompatible') { toast('This browser cannot join online games. Try Chrome, Edge or Safari.'); goHome(); }
+  });
+  const net = G.net;
+  G.subs.push(() => { net.alive = false; clearTimeout(net.timer); try { peer.destroy(); } catch (e) {} });
+}
+function connectHost() {
+  const n = G.net; if (!n || !n.alive || n.role !== 'client') return;
+  if (n.peer.disconnected) { try { n.peer.reconnect(); } catch (e) {} }
+  const conn = n.peer.connect(PEER_PREFIX + G.code, {reliable: true});
+  n.conn = conn;
+  conn.on('open', () => { n.tries = 0; send(conn, {t: 'hello', pid: G.me, name: myName()}); netStatus(); });
+  conn.on('data', msg => { try { clientHandle(msg); } catch (e) { console.error(e); } });
+  conn.on('close', () => { if (n.alive && n.conn === conn) { netStatus('Lost contact with the host. Reconnecting…'); scheduleReconnect(); } });
+}
+function scheduleReconnect() {
+  const n = G.net; if (!n || !n.alive || n.role !== 'client' || n.timer) return;
+  n.tries++;
+  netStatus(`Waiting for the host… (attempt ${n.tries})`);
+  n.timer = setTimeout(() => { n.timer = null; connectHost(); }, Math.min(10000, 1500 * n.tries));
+}
+function clientHandle(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.t === 'lobby' && msg.L) { G.lobby = msg.L; G.seats = msg.L.seats || []; if (!G.S) { G.screen = 'lobby'; render(); } }
+  else if (msg.t === 'state' && msg.S) { if (msg.err) toast(msg.err); onState(msg.S, !!msg.force); }
+}
+
+// shared ----------------------------------------------------------------
+function claims() {
+  const map = {}; let n = 0;
+  for (const s of G.seats) for (const id of (s.picks || [])) if (!(id in map) && n < 4) { map[id] = s.uid; n++; }
+  return map;
+}
+function toggleSeatPick(id) {
+  const mine = G.seats.find(s => s.uid === G.me); if (!mine) return;
+  const c = claims();
+  let picks = (mine.picks || []).slice();
+  if (picks.includes(id)) picks = picks.filter(x => x !== id);
+  else { if (c[id] && c[id] !== G.me) return; if (Object.keys(c).length >= 4) { toast('Four investigators is the most the house will take.'); return; } picks.push(id); }
+  mine.picks = picks;
+  if (G.net.role === 'host') broadcast({t: 'lobby', L: G.lobby});
+  else if (!send(G.net.conn, {t: 'picks', picks})) toast('Not connected to the host right now.');
+  render();
+}
+function beginOnline() {
+  if (!G.net || G.net.role !== 'host') return;
+  const c = claims();
+  const order = INVESTIGATORS.map(d => d.id).filter(id => c[id]);
+  if (!order.length) { toast('Someone needs to choose an investigator first.'); return; }
+  const S = newGame(order.map(id => ({id, owner: c[id]})));
+  Object.assign(S, {code: G.code, host: G.me, created: G.lobby.created, mode: 'online',
+    players: [...new Set([G.me, ...order.map(id => c[id])])], names: Object.fromEntries(G.lobby.seats.map(s => [s.uid, s.name]))});
+  hostAccept(S);
+}
+async function takeover(i) {
+  const ok = await confirmBox('Take this seat?', `You'll control ${nm(G.S.inv[i])} from now on. Use this if a player has left or stopped responding.`);
+  if (!ok) return;
+  const D = clone(G.S); D.inv[i].owner = G.me; D.rev = G.S.rev + 1;
+  if (!D.players.includes(G.me)) D.players.push(G.me);
+  log(D, `${myName() || 'The host'} takes over ${nm(D.inv[i])}.`);
+  hostAccept(D);
+}
+async function invite() {
+  const url = location.origin + location.pathname + '?join=' + G.code;
+  const text = `Join my game of Ashgrove House — code ${G.code}`;
+  try { if (navigator.share) { await navigator.share({title: 'Ashgrove House', text, url}); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('Invite link copied.'); } catch (e) { info('Invite link', `<p>Send this to your friends:</p><p style="word-break:break-all"><b>${esc(url)}</b></p>`, 'Done'); }
+}
+async function goHome(ask) {
+  if (ask && G.mode === 'online' && G.net && G.net.role === 'host' && G.S && G.S.phase === 'play') {
+    const ok = await confirmBox('Leave the game?', 'You are the host. Everyone else will be paused until you choose "Resume hosting" on this device.');
+    if (!ok) return;
+  }
+  clearSubs(); G.net = null; G.netText = ''; G.mode = null; G.S = null; G.lobby = null; G.code = null; G.screen = 'home'; render();
+}
+
+// ---------------------------------------------------------- rendering
+const app = $('#app');
+function render() {
+  const side = $('.side'), log_ = $('.log');
+  const keep = {y: window.scrollY, side: side && side.scrollTop, log: log_ && log_.scrollTop};
+  if (G.screen === 'home') renderHome();
+  else if (G.screen === 'setup') renderSetup();
+  else if (G.screen === 'lobby') renderLobby();
+  else if (G.screen === 'loading') app.innerHTML = `<div class="home"><div class="title"><h1>Ashgrove House</h1><p id="loadmsg">Knocking on the door…</p></div></div>`;
+  else if (G.screen === 'game') renderGame();
+  const l2 = $('.log'); if (l2 && keep.log) l2.scrollTop = keep.log;
+  window.scrollTo(0, keep.y);
+}
+
+function invCard(d, extra = '', cls = '', act = '') {
+  return `<button class="invc ${cls}" ${act}>
+    ${extra}
+    <div class="nm"><span class="dot" style="background:${d.color}"></span>${d.name}</div>
+    <div class="role">${d.role}</div>
+    <div class="stats">${Object.keys(STAT_SHORT).map(s => `<span class="stat">${STAT_SHORT[s]} <b>${d[s]}</b></span>`).join('')}
+      <span class="stat" style="color:#e07a72">HP <b>${d.hp}</b></span><span class="stat" style="color:#a5b2ee">SAN <b>${d.san}</b></span></div>
+    <div class="abil"><b>${d.ability}.</b> ${d.text}</div>
+  </button>`;
+}
+
+function renderHome() {
+  const local = loadLocal(), hosted = loadHost(), recent = lsGet('ag-recent');
+  const codeVal = $('#code') ? $('#code').value : '';
+  const nameVal = $('#pname') ? $('#pname').value : myName();
+  app.innerHTML = `<div class="home">
+    <div class="title"><div class="eyebrow">A cooperative horror for 1–4 investigators</div><h1>Ashgrove House</h1>
+      <p>A letter brought you here: Lydia Ashgrove has not been seen in nine days. The front door closed behind you, and now it isn't there at all.</p></div>
+    <div class="card"><h2>Play online</h2>
+      <p class="dim" style="margin-top:0">Everyone plays on their own phone or computer: iPhone, Android or Windows. No accounts needed. One player hosts, and their screen must stay open while you play.</p>
+      <div class="row" style="margin-bottom:12px"><label class="dim" for="pname">Your name</label><input id="pname" maxlength="24" autocomplete="nickname" style="text-transform:none;letter-spacing:normal;width:13em" placeholder="e.g. Sam"></div>
+      <div class="row"><button class="primary" data-act="host">Host a game</button>
+        <input id="code" placeholder="CODE" maxlength="8" autocomplete="off" autocapitalize="characters"><button data-act="joincode">Join</button></div>
+      ${(hosted && hosted.phase === 'play') || recent ? `<div class="list">
+        ${hosted && hosted.phase === 'play' ? `<button data-act="rehost"><span>Resume hosting game ${esc(hosted.code)}</span><small>round ${hosted.round}</small></button>` : ''}
+        ${recent && (!hosted || hosted.code !== recent) ? `<button data-act="join" data-code="${esc(recent)}"><span>Rejoin game ${esc(recent)}</span><small>last joined</small></button>` : ''}</div>` : ''}
+    </div>
+    <div class="card"><h2>Play on this device</h2>
+      <p class="dim" style="margin-top:0">Pass the device around the table, or play solo.</p>
+      <div class="row"><button data-act="setup">New game</button>${local && local.phase === 'play' ? `<button data-act="resume">Resume (round ${local.round})</button>` : ''}</div></div>
+    <div class="card"><div class="row"><button class="ghost" data-act="rules">How to play</button><button class="ghost" data-act="install">Install as an app</button></div></div>
+  </div>`;
+  $('#code').value = codeVal; $('#pname').value = nameVal;
+}
+function renderLists() {}
+function renderSetup() {
+  const p = G.localPicks;
+  app.innerHTML = `<div class="home">
+    <div class="row" style="justify-content:space-between"><h2 style="font-size:30px">Choose investigators</h2><button class="ghost small" data-act="home">Back</button></div>
+    <p class="dim">Pick 1 to 4. Solo players do best with two. Turn order follows your picks.</p>
+    <div class="invgrid">${INVESTIGATORS.map(d => {
+      const i = p.indexOf(d.id);
+      return invCard(d, i >= 0 ? `<span class="tag">#${i + 1}</span>` : '', i >= 0 ? 'mine' : '', `data-act="lpick" data-id="${d.id}"`);
+    }).join('')}</div>
+    <div class="row" style="margin-top:16px"><button class="primary" data-act="lbegin" ${p.length ? '' : 'disabled'}>Enter Ashgrove House</button></div>
+  </div>`;
+}
+
+function renderLobby() {
+  const L = G.lobby; if (!L) return;
+  const c = claims();
+  const isHost = L.host === G.me;
+  const seated = G.seats.some(s => s.uid === G.me);
+  app.innerHTML = `<div class="home">
+    <div class="row" style="justify-content:space-between"><div><div class="eyebrow">Game code</div><div class="code">${esc(L.code)}</div></div>
+      <button class="ghost small" data-act="home">Leave</button></div>
+    <div class="row"><button data-act="invite">Share invite link</button><small class="dim">or tell friends the code: they open this site and tap Join.</small></div>
+    <p class="dim" id="net">${esc(G.netText || '')}</p>
+    <div class="card"><h2>At the door</h2><div class="list">${G.seats.map(s =>
+      `<div class="row" style="justify-content:space-between"><span>${esc(pname(s.uid))}${s.uid === L.host ? ' <small>(host)</small>' : ''}</span>
+       <small>${(s.picks || []).filter(id => c[id] === s.uid).map(id => INVD(id).name).join(', ') || 'choosing…'}</small></div>`).join('') || '<small>…</small>'}</div></div>
+    <div class="card"><h2>Choose your investigator</h2>
+      <p class="dim" style="margin:0">Tap to claim. One player may control more than one. Up to four in total.</p>
+      <div class="invgrid">${INVESTIGATORS.map(d => {
+        const o = c[d.id]; const mine = o === G.me; const taken = o && !mine;
+        const tag = mine ? '<span class="tag">Yours</span>' : taken ? `<span class="tag">${esc(pname(o))}</span>` : '';
+        return invCard(d, tag, mine ? 'mine' : taken ? 'taken' : '', seated && !taken ? `data-act="spick" data-id="${d.id}"` : 'disabled');
+      }).join('')}</div>
+      <div class="row" style="margin-top:16px">${isHost
+        ? `<button class="primary" data-act="obegin" ${Object.keys(c).length ? '' : 'disabled'}>Begin the investigation</button>`
+        : `<small>Waiting for ${esc(pname(L.host))} to begin…</small>`}</div></div>
+  </div>`;
+}
+
+const W = 180, H = 130, P = 7;
+function mapSVG(S) {
+  const seen = r => S.rooms[r].seen;
+  const frontier = new Set();
+  Object.keys(ROOMS).forEach(r => { if (seen(r)) neighbors(r).forEach(n => { if (!seen(n)) frontier.add(n); }); });
+  const ci = cur(S);
+  const movable = new Set();
+  if (canAct() && S.actions > 0) neighbors(ci.room).forEach(n => movable.add(n));
+  let o = `<svg viewBox="0 0 ${4 * W} ${4 * H}" class="map" role="img" aria-label="Map of Ashgrove House">
+    <defs><linearGradient id="gSeen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2c22"/><stop offset="1" stop-color="#231a14"/></linearGradient>
+    <linearGradient id="gDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f1a1d"/><stop offset="1" stop-color="#121014"/></linearGradient></defs>`;
+  for (const [id, R] of Object.entries(ROOMS)) {
+    const isSeen = seen(id), isF = frontier.has(id);
+    if (!isSeen && !isF) continue;
+    const x = R.x * W + P, y = R.y * H + P, w = W - 2 * P, h = H - 2 * P;
+    const cls = ['room', isSeen ? 'seen' : 'fog', R.dark && isSeen ? 'dark' : '', movable.has(id) ? 'can-move' : '', id === ci.room && S.phase === 'play' ? 'here' : ''].join(' ');
+    o += `<g class="${cls}" data-act="room" data-room="${id}"><rect class="bg" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>`;
+    if (isSeen) {
+      o += `<text x="${x + 10}" y="${y + 24}" class="rname">${esc(R.n)}</text>`;
+      if (S.rooms[id].pile.length) o += `<text x="${x + w - 10}" y="${y + 50}" text-anchor="end" class="rsearch">⌕</text>`;
+      if (id === 'crypt') for (let k = 0; k < need(S); k++) o += `<rect x="${x + 10 + k * 16}" y="${y + 34}" width="11" height="11" rx="2" fill="${k < S.ritual ? '#b9a6f0' : '#0d0a08'}" stroke="#6b5ca8"/>`;
+      if (R.dark) o += `<text x="${x + 10}" y="${y + 44}" style="font-size:12px;fill:#7d7088;font-style:italic">dark</text>`;
+      S.inv.forEach((v, i) => {
+        if (v.out || v.room !== id) return;
+        const k = S.inv.filter((u, j) => j < i && !u.out && u.room === id).length;
+        const d = INVD(v.id);
+        o += `<g class="tok ${i === S.turn && S.phase === 'play' ? 'turn' : ''}"><circle cx="${x + 22 + k * 33}" cy="${y + h - 22}" r="15" fill="${d.color}" stroke="#120d0a" stroke-width="2"/><text x="${x + 22 + k * 33}" y="${y + h - 21}">${d.name[0]}</text></g>`;
+      });
+      monAt(S, id).forEach((m, k) => {
+        const M = MONSTERS[m.type], cx = x + w - 22 - k * 35, cy = y + h - 58;
+        o += `<g class="mon ${M.boss ? 'boss' : ''}"><circle cx="${cx}" cy="${cy}" r="${M.boss ? 17 : 15}"/><text x="${cx}" y="${cy + 1}">${M.g}</text><text class="hpt" x="${cx}" y="${cy + 26}">${m.hp}♥</text></g>`;
+      });
+    } else o += `<text x="${x + w / 2}" y="${y + h / 2 + 14}" class="fogq">?</text>`;
+    o += '</g>';
+  }
+  for (const d of DOORS) {
+    const [a, b, lock] = d;
+    if (!seen(a) && !seen(b)) continue;
+    const A = ROOMS[a], B = ROOMS[b];
+    let x, y, w, h;
+    if (A.y === B.y) { x = Math.max(A.x, B.x) * W - 6; y = A.y * H + H / 2 - 17; w = 12; h = 34; }
+    else { x = A.x * W + W / 2 - 17; y = Math.max(A.y, B.y) * H - 6; w = 34; h = 12; }
+    const open = isOpen(S, d);
+    o += `<g class="doorg"><rect class="door ${!open ? lock : ''}" x="${x}" y="${y}" width="${w}" height="${h}" rx="2"/>${!open ? `<text x="${x + w / 2}" y="${y + h / 2 + 1}">${lock === 'key' ? '⚿' : '✶'}</text>` : ''}</g>`;
+  }
+  return o + '</svg>';
+}
+
+function bars(inv) {
+  const d = INVD(inv.id);
+  return `<div class="bars"><span>Health</span><div class="bar hp"><i style="width:${100 * inv.hp / d.hp}%"></i></div><span>${inv.hp}/${d.hp}</span>
+    <span>Sanity</span><div class="bar san"><i style="width:${100 * inv.san / d.san}%"></i></div><span>${inv.san}/${d.san}</span></div>`;
+}
+function itemChips(inv) {
+  const chips = inv.items.map(k => `<span class="chip" title="${esc(ITEMS[k].t)}">${ITEMS[k].n}${k === 'revolver' ? ` (${inv.ammo})` : ''}</span>`);
+  chips.push(`<span class="chip clue" title="Spend a Clue to turn a ◉ die into a success">◉ ${inv.clues} Clue${inv.clues === 1 ? '' : 's'}</span>`);
+  return `<div class="chips">${chips.join('')}</div>`;
+}
+
+function actionButtons(S) {
+  const inv = cur(S), r = inv.room, ms = monAt(S, r), mates = invAt(S, r).filter(o => o !== inv);
+  const b = [];
+  const pile = S.rooms[r].pile.length;
+  b.push(`<button data-act="search" ${pile ? '' : 'disabled'}>Search<small>${pile ? `Observation · ${Math.max(1, statDice(S, inv, 'obs', 'search'))} dice` : 'Picked clean'}</small></button>`);
+  ms.forEach(m => {
+    const w = inv.items.includes('revolver') && inv.ammo > 0 ? 2 : (inv.items.includes('knife') || inv.items.includes('poker')) ? 1 : 0;
+    b.push(`<button data-act="attack" data-mid="${m.mid}">Attack ${MONSTERS[m.type].n}<small>Strength · ${INVD(inv.id).str + w} dice</small></button>`);
+  });
+  [...new Set(inv.items.filter(k => USABLE.includes(k)))].forEach(k => {
+    const usable = k === 'holywater' ? ms.length > 0 : true;
+    b.push(`<button data-act="use" data-k="${k}" ${usable ? '' : 'disabled'}>Use ${ITEMS[k].n}<small>${ITEMS[k].t.replace('Action: ', '')}</small></button>`);
+  });
+  if (inv.id === 'mara') b.push(`<button data-act="aid">Field Medic<small>+1 Health to someone here</small></button>`);
+  if (!ms.length) b.push(`<button data-act="compose" ${inv.san < INVD(inv.id).san ? '' : 'disabled'}>Compose yourself<small>Will · regain up to 2 Sanity</small></button>`);
+  if (r === 'library' && !inv.tome) b.push(`<button data-act="tome">Read the open book<small>Lore · gain Clues, or lose your nerve</small></button>`);
+  if (r === 'crypt') b.push(`<button class="wide primary" data-act="ritual">Speak the Rite<small style="color:#f0d9d9">Lore · ${Math.max(1, statDice(S, inv, 'lore', 'ritual'))} dice · ${S.ritual}/${need(S)}</small></button>`);
+  if (mates.length && (inv.items.length || inv.clues)) b.push(`<button data-act="give">Hand something over<small>Free</small></button>`);
+  b.push(`<button class="wide ghost" data-act="end">End turn early</button>`);
+  return `<div class="acts">${b.join('')}</div>`;
+}
+
+function renderGame() {
+  const S = G.S; if (!S) return;
+  const inv = cur(S), d = INVD(inv.id);
+  const mine = canAct() || (G.busy && (G.mode === 'local' || inv.owner === G.me));
+  const myInvs = S.inv.filter(i => G.mode === 'local' || i.owner === G.me);
+  const mad = mine && inv.san <= 2 && S.phase === 'play';
+  const R = ROOMS[inv.room];
+  const rm = monAt(S, inv.room);
+  const doomPips = Array.from({length: S.doomMax}, (_, k) => `<span class="pip ${k < S.doom ? 'on' : ''} ${k === S.doomMax - (S.bossAt || 5) - 1 && !S.flags.boss ? 'boss' : ''}" ${k === S.doomMax - (S.bossAt || 5) - 1 && !S.flags.boss ? 'title="The Pale Guest wakes here"' : ''}></span>`).join('');
+  let turnBox;
+  if (S.phase !== 'play') {
+    turnBox = `<div class="card banner ${S.phase}"><h2>${S.phase === 'won' ? 'The house is quiet' : 'The house wins'}</h2><p class="flav" style="font-family:'IM Fell English',serif;font-style:italic">${esc(S.result || '')}</p>
+      <button class="primary" data-act="home">Back to the menu</button></div>`;
+  } else if (mine) {
+    turnBox = `<div class="card turn"><div class="eyebrow">Round ${S.round} · your turn · ${S.actions} action${S.actions === 1 ? '' : 's'} left</div>
+      <div class="who"><span class="dot" style="background:${d.color}"></span> ${d.name}</div>
+      ${G.busy ? '<p class="dim">…</p>' : `<p class="dim" style="margin:6px 0 0">Tap a glowing room on the map to move${rm.length ? ' (you must evade first)' : ''}.</p>${actionButtons(S)}`}</div>`;
+  } else {
+    turnBox = `<div class="card turn wait"><div class="eyebrow">Round ${S.round} · waiting</div>
+      <div class="who"><span class="dot" style="background:${d.color}"></span> ${d.name}</div>
+      <p class="dim" style="margin:4px 0 0">${esc(pname(inv.owner))} ${inv.owner === G.me ? '' : 'is'} taking this turn · ${S.actions} action${S.actions === 1 ? '' : 's'} left.</p></div>`;
+  }
+  const focus = mine ? inv : (myInvs.find(i => !i.out) || inv);
+  const fd = INVD(focus.id);
+  const isHost = G.mode === 'online' && S.host === G.me;
+  app.innerHTML = `<div class="game ${mad ? 'mad' : ''}">
+    <section class="board">
+      <div class="topbar"><h1>Ashgrove House</h1>
+        <div class="doom"><span class="eyebrow">Doom</span><div class="pips">${doomPips}</div></div>
+        <button class="small ghost" data-act="rules">Rules</button><button class="small ghost" data-act="home">Menu</button></div>
+      <div class="mapwrap">${mapSVG(S)}</div>
+      <div class="card roominfo"><div class="eyebrow">${esc(d.name)} is in</div><h3>${esc(R.n)}</h3><p>${esc(R.d)}</p>
+        ${rm.length ? `<div style="margin-top:8px">${rm.map(m => { const M = MONSTERS[m.type]; return `<div><b style="color:#ff8f8f">${M.n}</b> <small>· ${m.hp}/${M.hp} health · hits ${M.dmg} · horror ${M.horror} · evade ${M.evade}</small></div>`; }).join('')}</div>` : ''}
+        <small>${S.rooms[inv.room].pile.length ? 'There are corners here still worth searching.' : 'Nothing more to find here.'}</small></div>
+    </section>
+    <aside class="side">
+      ${turnBox}
+      <div class="card"><div class="eyebrow">${mine ? 'Acting' : focus === inv ? 'Acting' : 'Your investigator'}</div>
+        <div class="row" style="justify-content:space-between"><h3 style="font-size:21px"><span class="dot" style="background:${fd.color}"></span> ${fd.name}</h3><small>${esc(ROOMS[focus.room].n)}</small></div>
+        <div class="stats">${Object.keys(STAT_SHORT).map(s => `<span class="stat">${STAT_SHORT[s]} <b>${fd[s]}</b></span>`).join('')}</div>
+        ${bars(focus)}${itemChips(focus)}
+        <p class="abil" style="margin:8px 0 0"><b>${fd.ability}.</b> ${fd.text}${focus.coll ? ' <span style="color:#ff7c72">· Already collapsed once.</span>' : ''}</p></div>
+      <div class="card"><div class="eyebrow">Objectives</div><div class="obj" style="margin-top:6px">
+        <span>Fragments</span><div class="pips">${[0, 1, 2].map(k => `<span class="pip frag ${k < S.fragments ? 'on' : ''}"></span>`).join('')}</div>
+        <span>Iron Key</span><small>${S.flags.keyOpen ? 'Cellar unlocked' : S.inv.some(i => i.items.includes('ironkey')) ? 'Found — take it to the Kitchen' : 'Hidden somewhere'}</small>
+        <span>The Rite</span><div class="pips">${Array.from({length: need(S)}, (_, k) => `<span class="pip rit ${k < S.ritual ? 'on' : ''}"></span>`).join('')}</div></div></div>
+      <div class="card party"><div class="eyebrow">Investigators</div>${S.inv.map((v, i) => {
+        const vd = INVD(v.id);
+        return `<div class="p ${v.out ? 'out' : ''}"><span class="dot" style="background:${vd.color}"></span><span class="nm">${vd.name}${i === S.turn && S.phase === 'play' ? ' <small>◂ turn</small>' : ''}</span>
+          <span class="mini"><span class="h">♥<b>${v.hp}</b></span><span class="s">✺<b>${v.san}</b></span><span style="color:var(--clue)">◉<b>${v.clues}</b></span></span>
+          <span class="sub">${v.out ? 'Lost' : esc(ROOMS[v.room].n)}${G.mode === 'online' ? ' · ' + esc(pname(v.owner)) : ''}${v.items.length ? ' · ' + v.items.map(k => ITEMS[k].n).join(', ') : ''}
+          ${isHost && v.owner !== G.me && i === S.turn && S.phase === 'play' ? ` <button class="small ghost" data-act="takeover" data-i="${i}">Take seat</button>` : ''}</span></div>`;
+      }).join('')}</div>
+      <div class="card"><div class="eyebrow">What has happened</div><div class="log">${S.log.map(e => `<div class="${e.k || ''}">${esc(e.t)}</div>`).join('')}</div></div>
+      ${G.mode === 'online' ? `<small class="dim" style="text-align:center" id="net">${esc(G.netText || 'Game ' + S.code)}</small>${G.net && G.net.role === 'host' ? `<button class="small ghost" data-act="invite">Share invite link</button>` : ''}` : ''}
+    </aside></div>`;
+}
+
+// --------------------------------------------------------------- modals
+function openModal(html, cls = '') {
+  const back = document.createElement('div');
+  back.className = 'mback';
+  back.innerHTML = `<div class="modal ${cls}">${html}</div>`;
+  document.body.appendChild(back);
+  return back;
+}
+function info(title, html, btn = 'Continue', cls = '') {
+  return new Promise(res => {
+    const m = openModal(`<h2>${title}</h2>${html}<div class="btns"><button class="primary" data-x="ok">${btn}</button></div>`, cls);
+    m.addEventListener('click', e => { if (e.target.closest('[data-x="ok"]')) { m.remove(); res(); } });
+  });
+}
+function confirmBox(title, text) {
+  return new Promise(res => {
+    const m = openModal(`<h2>${title}</h2><p>${esc(text)}</p><div class="btns"><button data-x="no">Cancel</button><button class="primary" data-x="yes">Yes</button></div>`);
+    m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (b) { m.remove(); res(b.dataset.x === 'yes'); } });
+  });
+}
+function choose(title, opts, note = '') {
+  return new Promise(res => {
+    const m = openModal(`<h2>${title}</h2>${note ? `<p class="dim">${note}</p>` : ''}<div class="list">${opts.map((o, i) => `<button data-i="${i}">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ''}</button>`).join('')}</div>
+      <div class="btns"><button class="ghost" data-x="cancel">Cancel</button></div>`);
+    m.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      m.remove(); res(b.dataset.i != null ? opts[+b.dataset.i].v : null);
+    });
+  });
+}
+function chooseAlly(D, inv, field, title) {
+  const people = invAt(D, inv.room);
+  return choose(title, people.map(p => ({label: `${nm(p)}${p === inv ? ' (you)' : ''}`, sub: field === 'hp' ? `Health ${p.hp}/${INVD(p.id).hp}` : `Sanity ${p.san}/${INVD(p.id).san}`, v: p})));
+}
+function chooseMonster(ms, title) { return choose(title, ms.map(m => ({label: MONSTERS[m.type].n, sub: `${m.hp} health left`, v: m}))); }
+
+const FACE = {S: '✦', IS: '◉', C: '✦', I: '◉', B: '·'};
+async function rollTest(D, inv, stat, o = {}) {
+  const n = Math.max(1, statDice(D, inv, stat, o.ctx) + (o.bonus || 0));
+  let dice = Array.from({length: n}, d6);
+  let rerolled = false;
+  if (stat === 'lore' && inv.id === 'elias' && dice.some(v => v <= 3)) { dice = dice.map(v => v <= 3 ? d6() : v); rerolled = true; }
+  const res = await diceModal({inv, stat, label: o.label, dice, need: o.need, insightFree: o.insight, rerolled});
+  inv.clues -= res.spent;
+  D.rseq = (D.rseq || 0) + 1;
+  D.roll = {seq: D.rseq, who: inv.id, label: o.label || STAT_NAMES[stat], faces: res.faces.map(f => FACE[f]).join(' '), succ: res.succ, need: o.need || 0};
+  return res.succ;
+}
+function diceModal({inv, stat, label, dice, need, insightFree, rerolled}) {
+  return new Promise(resolve => {
+    const faces = dice.map(v => v >= 5 ? 'S' : v === 4 ? (insightFree ? 'IS' : 'I') : 'B');
+    let spent = 0;
+    const d = INVD(inv.id);
+    const m = openModal(`<div class="eyebrow">${esc(d.name)} · ${STAT_NAMES[stat]} · ${faces.length} ${faces.length === 1 ? 'die' : 'dice'}</div><h2>${esc(label || STAT_NAMES[stat])}</h2>
+      <div class="dice" id="dice"></div><div class="dsum" id="dsum">&nbsp;</div><div class="btns" id="dctrl" style="justify-content:center"></div>`);
+    const diceEl = $('#dice', m);
+    diceEl.innerHTML = faces.map(() => `<div class="die rolling">·</div>`).join('');
+    const glyphs = ['✦', '◉', '·', '·'];
+    const iv = setInterval(() => diceEl.querySelectorAll('.die').forEach(e => e.textContent = pick(glyphs)), 70);
+    const succ = () => faces.filter(f => f === 'S' || f === 'IS' || f === 'C').length;
+    const draw = () => {
+      diceEl.innerHTML = faces.map(f => `<div class="die ${f}">${FACE[f]}</div>`).join('');
+      const s = succ();
+      const notes = [];
+      if (rerolled) notes.push('Erudite: blanks rerolled once.');
+      if (insightFree) notes.push('Keen Eye: ◉ counts as a success.');
+      $('#dsum', m).innerHTML = `${s} success${s === 1 ? '' : 'es'}${need ? (s >= need ? ' — <span class="pass">passed</span>' : ` — <span class="fail">failed</span> <small>(need ${need})</small>`) : ''}${notes.length ? `<br><small>${notes.join(' ')}</small>` : ''}`;
+      const left = inv.clues - spent;
+      const canSpend = faces.includes('I') && left > 0;
+      $('#dctrl', m).innerHTML = `${canSpend ? `<button data-x="spend">Spend a Clue: ◉ → ✦ <small>(${left} left)</small></button>` : ''}<button class="primary" data-x="ok">Continue</button>`;
+    };
+    setTimeout(() => { clearInterval(iv); draw(); }, 700);
+    m.addEventListener('click', e => {
+      const b = e.target.closest('[data-x]'); if (!b) return;
+      if (b.dataset.x === 'spend') { const i = faces.indexOf('I'); if (i >= 0 && inv.clues - spent > 0) { faces[i] = 'C'; spent++; draw(); } }
+      else { m.remove(); resolve({succ: succ(), faces: faces.slice(), spent}); }
+    });
+  });
+}
+let mythosShowing = Promise.resolve();
+function showMythos(M) {
+  if (!M) return Promise.resolve();
+  mythosShowing = mythosShowing.then(() => {
+    document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500);
+    return info(`${esc(M.t)}`, `<div class="eyebrow">Mythos · end of round ${M.round}</div><p class="flav">${esc(M.f)}</p><ul>${M.lines.map(l => `<li class="${l.k || ''}" style="${l.k === 'dire' ? 'color:#ff7c72' : l.k === 'bad' ? 'color:#e09a8e' : l.k === 'good' ? 'color:#b9d3a8' : l.k === 'clue' ? 'color:var(--clue)' : ''}">${esc(l.t)}</li>`).join('')}</ul>`, 'Face the night', 'myth');
+  });
+  return mythosShowing;
+}
+function showEnding(S) {
+  return info(S.phase === 'won' ? 'The house is quiet' : 'The house wins', `<p class="flav">${esc(S.result || '')}</p><p class="dim">Round ${S.round} · Doom ${Math.min(S.doom, S.doomMax)}/${S.doomMax}</p>`, 'Close', S.phase === 'won' ? 'won' : 'lost');
+}
+function showInstall() {
+  info('Install as an app', `<p><b>iPhone / iPad (Safari):</b> tap the Share button, then <i>Add to Home Screen</i>.</p>
+    <p><b>Android (Chrome):</b> tap the ⋮ menu, then <i>Install app</i> or <i>Add to Home screen</i>.</p>
+    <p><b>Windows (Chrome or Edge):</b> click the install icon at the right of the address bar, or ⋯ menu → <i>Apps</i> → <i>Install</i>.</p>
+    <p class="dim">It then opens full-screen like a normal app. Single-device games also work offline.</p>`, 'Got it');
+}
+function showRules() {
+  info('How to play', `<div class="rules">
+    <p>You and your fellow investigators are trapped in Ashgrove House. Work together: everyone wins or loses as one.</p>
+    <h3>Winning</h3><p>Search the house for the three <b>Fragments of the Rite</b> and the <b>Iron Key</b>. The key opens the cellar door in the Kitchen; the three fragments break the seal between the Cellar and the Crypt. In the Crypt, <b>Speak the Rite</b> until the Rite is complete (4–7 successes, more for bigger groups; the crypt shows how many).</p>
+    <h3>Losing</h3><p>The Doom track fills by one every round and with some events. If it fills, or every investigator is lost, the house wins. When Doom reaches the purple-edged box, the Pale Guest wakes. Solo investigators get 3 actions a turn; bigger groups face a shorter clock and a longer Rite.</p>
+    <h3>Your turn</h3><p>Each investigator takes 2 actions: <b>move</b> (tap a glowing room), <b>search</b>, <b>attack</b>, <b>use an item</b>, <b>compose yourself</b>, or a room's special action. Handing items to someone in your room is free.</p>
+    <h3>Tests</h3><p>Roll one die per point in the stat. A search with two successes turns up two things. <b>✦</b> is a success. <b>◉</b> is a near-miss: spend a Clue to turn it into a success. Lanterns help you search; dark rooms hinder you.</p>
+    <h3>Creatures</h3><p>To leave a room with a creature in it you must evade. After everyone has acted, the Mythos phase draws an event, then creatures move toward you and attack, and anyone sharing a room with one must resist horror.</p>
+    <h3>Falling</h3><p>The first time Health or Sanity hits zero, you collapse, recover half, and Doom rises. The second time, you are lost.</p>
+  </div>`, 'Understood');
+}
+
+// ---------------------------------------------------------------- toasts
+function toast(t, ms = 3600) {
+  const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = esc(t);
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), ms);
+}
+function rollToast(r) {
+  const el = document.createElement('div'); el.className = 'toast';
+  el.innerHTML = `<b>${esc(INVD(r.who).name)}</b> · ${esc(r.label)}<br><span style="font-size:22px;letter-spacing:.15em;color:var(--candle)">${esc(r.faces)}</span> <small>${r.succ} success${r.succ === 1 ? '' : 'es'}</small>`;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), 4200);
+}
+
+// ---------------------------------------------------------------- events
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const a = b.dataset.act;
+  switch (a) {
+    case 'home': if (G.screen === 'game' && G.mode === 'local' && G.S) saveLocal(G.S); goHome(true); break;
+    case 'rules': showRules(); break;
+    case 'setup': G.localPicks = []; G.screen = 'setup'; render(); break;
+    case 'lpick': { const i = G.localPicks.indexOf(b.dataset.id); if (i >= 0) G.localPicks.splice(i, 1); else if (G.localPicks.length < 4) G.localPicks.push(b.dataset.id); render(); break; }
+    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenM = null; G.seenEnd = null; const S = newGame(G.localPicks.map(id => ({id, owner: 'local'}))); S.mode = 'local'; saveLocal(S); G.S = null; onState(S); break; }
+    case 'resume': { const S = loadLocal(); if (S) { clearSubs(); G.mode = 'local'; G.seenM = null; G.seenEnd = null; G.S = null; onState(S); } break; }
+    case 'host': hostGame(); break;
+    case 'rehost': { const h = loadHost(); if (h) hostGame(h); break; }
+    case 'invite': invite(); break;
+    case 'install': showInstall(); break;
+    case 'joincode': joinGame($('#code') && $('#code').value); break;
+    case 'join': joinGame(b.dataset.code); break;
+    case 'spick': toggleSeatPick(b.dataset.id); break;
+    case 'obegin': beginOnline(); break;
+    case 'takeover': takeover(+b.dataset.i); break;
+    case 'room': {
+      const S = G.S; if (!S) break;
+      const to = b.dataset.room, inv = cur(S);
+      if (canAct() && S.actions > 0 && neighbors(inv.room).includes(to)) doAction('move', to);
+      else if (S.rooms[to].seen) {
+        const ms = monAt(S, to), who = invAt(S, to);
+        info(esc(ROOMS[to].n), `<p class="flav">${esc(ROOMS[to].d)}</p>${who.length ? `<p>Here: ${who.map(nm).join(', ')}</p>` : ''}${ms.length ? `<p style="color:#ff8f8f">${ms.map(m => MONSTERS[m.type].n + ' (' + m.hp + ' health)').join(', ')}</p>` : ''}<p class="dim">${S.rooms[to].pile.length ? 'Not yet searched clean.' : 'Nothing more to find.'}</p>`, 'Close');
+      }
+      break;
+    }
+    case 'search': case 'compose': case 'tome': case 'ritual': case 'aid': case 'give': case 'end': doAction(a); break;
+    case 'attack': doAction('attack', +b.dataset.mid); break;
+    case 'use': doAction('use', b.dataset.k); break;
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'code') joinGame(e.target.value); });
+
+render();
+initCaps();
+</script>
+</body>
+</html>

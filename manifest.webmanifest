@@ -1,7 +1,7 @@
 {
-  "name": "Ashgrove House",
-  "short_name": "Ashgrove",
-  "description": "A cooperative, turn-based horror game for 1–4 players.",
+  "name": "Greywater",
+  "short_name": "Greywater",
+  "description": "Chapter 1 of a cooperative, turn-based horror game for 1–4 players.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,13 +1,14 @@
-# Ashgrove House
+# Greywater
 
-A cooperative, turn-based horror game for 1–4 players, inspired by investigation board games. Explore a haunted mansion, find the three Fragments of the Rite and the Iron Key, then speak the Rite in the sealed crypt before Doom runs out.
+A cooperative, turn-based horror game in the style of Mansions of Madness, for 1–4 players.
 
 **Play:** https://metajjd.github.io/ashgrove-house/
 
-- Runs in any modern browser: iPhone/iPad (Safari), Android (Chrome), Windows (Chrome/Edge). Installable to the home screen.
-- **Online:** one player hosts and shares a 5-letter code or invite link; others join from their own devices. Peer-to-peer via [PeerJS](https://peerjs.com/) — no accounts, no server to run. The host's screen must stay open during play.
-- **One device:** pass-and-play or solo; works offline once installed.
+**Chapter 1 — The Greywater Choir.** Autumn, 1926. A letter from the director of Greywater Sanatorium: *"Come quickly. The patients have begun to sing."* Explore the building room by room, gather evidence, and survive long enough to learn what you actually came here to do.
 
-Difficulty scales with party size and was tuned by simulation to roughly 32–44% wins with sound play.
+- Rooms split into spaces; the map grows as you explore. Actions are tokens on the board: explore, search, interact, people, monsters.
+- MOM-style turns: 2 actions each in any order, then a Mythos phase (event → monsters → horror checks). Hidden clock, no doom track.
+- Damage and Horror cards, Wounded / Insane / eliminated, secret insanity cards, evidence and a randomized Reveal.
+- Runs in any modern browser on iPhone, Android and Windows; installable to the home screen. Online play is peer-to-peer via [PeerJS](https://peerjs.com/) (MIT) — no accounts. One device works too (solo players control two investigators).
 
-PeerJS is included under its MIT licence.
+The earlier prototype, *Ashgrove House*, is kept at [/ashgrove/](https://metajjd.github.io/ashgrove-house/ashgrove/).
