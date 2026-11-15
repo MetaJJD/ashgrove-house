@@ -8,7 +8,8 @@ const para = s => esc(s).split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}<
 const app = $('#app');
 const CELL = 140;
 // art that has been dropped in (art/rooms/<id>.webp); everything else uses placeholder floors
-const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: [], monsters: []};
+const PCLIP = '<clipPath id="pclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath>';
+const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara'], monsters: []};
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
@@ -29,6 +30,8 @@ function hatShapes(hat, cx, cy, r) {
 function portraitInner(id, cx, cy, r, gid) {
   const d = INVD(id);
   const hy = cy - r * 0.2;
+  if (ART.portraits.includes(id)) return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#1b130e"/><image href="art/portraits/${id}.webp" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" clip-path="url(#pclip)"/>
+    <circle cx="${cx}" cy="${cy}" r="${r * 0.93}" fill="none" stroke="${d.color}" stroke-width="${r * 0.14}"/>`;
   return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#${gid})"/>
     <path d="M${cx - r * 0.66} ${cy + r * 0.74} Q${cx - r * 0.6} ${cy + r * 0.16} ${cx} ${cy + r * 0.13} Q${cx + r * 0.6} ${cy + r * 0.16} ${cx + r * 0.66} ${cy + r * 0.74} Z" fill="#1b130e"/>
     <circle cx="${cx}" cy="${hy}" r="${r * 0.31}" fill="#1b130e"/>${hatShapes(d.hat, cx, cy, r)}
@@ -40,7 +43,7 @@ function portraitGrad(id, gid) {
 }
 function portraitSVG(id, size, cls = '') {
   const gid = 'ph-' + id + '-' + size;
-  return `<svg class="pt ${cls}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true"><defs>${portraitGrad(id, gid)}</defs>${portraitInner(id, 50, 50, 48, gid)}</svg>`;
+  return `<svg class="pt ${cls}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true"><defs>${PCLIP}${portraitGrad(id, gid)}</defs>${portraitInner(id, 50, 50, 48, gid)}</svg>`;
 }
 
 // ---------------------------------------------------------------- board
@@ -82,7 +85,7 @@ function tokenIcon(kind, cx, cy, r) {
 function boardSVG(S) {
   const reach = G.moveMode ? reachable(S) : {};
   const act = S.active >= 0 ? S.inv[S.active] : null;
-  let defs = FLOOR_DEFS + INVESTIGATORS.map(d => portraitGrad(d.id, 'pg-' + d.id)).join('');
+  let defs = PCLIP + FLOOR_DEFS + INVESTIGATORS.map(d => portraitGrad(d.id, 'pg-' + d.id)).join('');
   let rooms = '', overlays = '', doors = '', toks = '';
   for (const [rid, R] of Object.entries(ROOMS)) {
     if (!S.rooms[rid].rev) continue;
