@@ -17,6 +17,9 @@ const CONFIG = {
   fireSpread: 0.4,         // chance fire spreads each Mythos phase
   fireCap: 3,              // most spaces that can burn at once (0 = no limit)
   lateBurst: true,         // boiler bursts even if unexplored: the fire is waiting when you open the Boiler Room
+  goals: ['A', 'B', 'C'],  // possible Act II goals: A the Engine, B Ada Wren, C the Conductor
+  conductorHp: [8, 4],     // goal C: Marrow's health = 8 + 4 per investigator
+  conductorAura: 2,        // goal C: Will successes needed each Mythos by everyone in his room, or 1 Horror
   noiseSummon: 'once',     // noise with no Orderly on the board calls one out of the walls: false | 'once' (per game) | true
   lampDropAt: 3,         // damage in one hit that makes a held Oil Lamp drop and start a fire
   beatFrac: [0.27, 0.53, 0.8], // story escalations, as fractions of the hidden clock (4/8/12 on a 15-clock)
@@ -205,11 +208,23 @@ const MONSTERS = {
 };
 
 // --------------------------------------------------------------- state
-function newGame(picks) {
-  const evLive = shuffle(Object.keys(EVIDENCE)).slice(0, CONFIG.evLive);
-  const pool = shuffle(['revolver', 'axe', 'bandages', 'matches', 'clues2', 'clues2', 'holywater', 'laudanum', 'nothing']);
+// difficulty presets: shifts on top of the tuned Standard values
+const DIFF = {
+  easy: {n: 'Easy', clock: 4, evLive: 5, clues: 1, sub: 'A longer night, every lead is real, and an extra Clue each. About 2 in 3 groups escape.'},
+  std: {n: 'Standard', sub: 'The intended experience. About half of all groups escape.'},
+  hard: {n: 'Hard', clock: -3, grace: 0, mon: 1, sub: 'A shorter night, more monsters, and no extra round when someone falls. About 1 in 3 escape.'},
+};
+function newGame(picks, opt = {}) {
+  const df = DIFF[opt.diff] || {};
+  const clock = (CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax) + (df.clock || 0);
+  const evLive = shuffle(Object.keys(EVIDENCE)).slice(0, df.evLive || CONFIG.evLive);
+  // one weapon is always among the first finds; the rest of the pool, and which spell hides where, change every game
+  const rest = shuffle(['bandages', 'bandages', 'matches', 'clues2', 'clues2', 'holywater', 'laudanum', 'knife', 'lantern', 'lexicon', 'nothing', pick(['revolver', 'axe'])]);
+  const lead = shuffle([pick(['revolver', 'axe']), rest.pop(), rest.pop()]);
+  const pool = lead.concat(rest);
   const spots = {};
-  const fixed = {boiler: 'valve', cabinet: 'laudanum', benches: 'oillamp', bookcase: 'spell:binding', pews: 'spell:mend', tubs: 'spell:still'};
+  const sp3 = shuffle(['spell:binding', 'spell:mend', 'spell:still']);
+  const fixed = {boiler: 'valve', benches: pick(['oillamp', 'oillamp', 'lantern']), bookcase: sp3[0], pews: sp3[1], tubs: sp3[2]};
   let pi = 0;
   for (const id of Object.keys(SEARCH)) {
     if (fixed[id]) spots[id] = {c: fixed[id]};
@@ -219,13 +234,13 @@ function newGame(picks) {
   const rooms = {};
   Object.keys(ROOMS).forEach(r => rooms[r] = {rev: false});
   const S = {
-    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax, beatAt: CONFIG.beatFrac.map(f => Math.round(f * (CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax))), maxMon: CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters,
+    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: clock, beatAt: CONFIG.beatFrac.map(f => Math.round(f * clock)), maxMon: (CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters) + (df.mon || 0), grace: df.grace != null ? df.grace : CONFIG.graceRounds, opt,
     threat: 0, active: -1, actions: 0, moveLeft: 0, done: picks.map(() => false),
-    inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart, dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
+    inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart + (df.clues || 0), dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
     puzzles: makePuzzles(), fire: {}, flood: {}, ext: 0, flip: null,
     rooms, tokens: [], spots, evLive, evidence: [], goal: null, engine: 0, ada: null, monsters: [], mid: 1, dark: {},
     decks: {dmg: shuffle(DMG_DECK), hor: shuffle(HOR_DECK)}, noise: null, lastRound: 0, pendingBoss: null,
-    mythosUsed: [], log: [], stories: [], storySeq: 0, rseq: 0, roll: null, result: null, revealed: {},
+    mythosUsed: [], log: [], stories: [], storySeq: 0, rseq: 0, roll: null, result: null, revealed: {}, stats: {},
   };
   revealRoom(S, 'hall', null);
   story(S, 'The Greywater Choir', 'Autumn, 1926. A letter from Dr. Hollis Marrow, director of Greywater Sanatorium, reached each of you on the same morning: “Come quickly. The patients have begun to sing.”\n\nYou arrive at dusk. The building on the black lake is silent. The front doors close behind you — and lock.\n\nFind out what happened at Greywater.', 'intro');
@@ -237,6 +252,8 @@ function story(S, title, text, kind = 'story', img = null) { S.storySeq++; S.sto
 function say(S, L, t, k) { log(S, t, k); if (L) L.push({t, k}); }
 
 const nm = inv => INVD(inv.id).name;
+const stat = (S, id, key, n = 1) => { if (!id) return; S.stats = S.stats || {}; const t = S.stats[id] = S.stats[id] || {}; t[key] = (t[key] || 0) + n; };
+const monHp = m => m.hp || MONSTERS[m.type].hp;
 const first = inv => INVD(inv.id).name.split(' ').slice(-1)[0] === 'Agnes' ? 'Agnes' : INVD(inv.id).name.split(' ')[0];
 const activeInv = S => S.inv.filter(i => !i.out);
 const invAt = (S, sp) => S.inv.filter(i => !i.out && i.space === sp);
@@ -285,6 +302,7 @@ function hurt(S, inv, n, why, L) {
   if (n <= 0) return;
   const got = [];
   for (let k = 0; k < n; k++) { const c = draw(S, 'dmg'); inv.dmg.push(c); if (DMG_CARDS[c].up) got.push(DMG_CARDS[c].n); }
+  stat(S, inv.id, 'dmg', n);
   say(S, L, `${nm(inv)} suffers ${n} Damage${why ? ' — ' + why : ''}${got.length ? ` (${got.join(', ')}!)` : ''}.`, 'bad');
   status(S, inv, L);
 }
@@ -293,6 +311,7 @@ function scare(S, inv, n, why, L) {
   if (inv.id === 'agnes') { n -= 1; if (n <= 0) { say(S, L, `${nm(inv)}'s faith holds${why ? ' against ' + why : ''}.`); return; } }
   const got = [];
   for (let k = 0; k < n; k++) { const c = draw(S, 'hor'); inv.hor.push(c); if (HOR_CARDS[c].up) got.push(HOR_CARDS[c].n); }
+  stat(S, inv.id, 'hor', n);
   say(S, L, `${nm(inv)} suffers ${n} Horror${why ? ' — ' + why : ''}${got.length ? ` (${got.join(', ')}!)` : ''}.`, 'bad');
   status(S, inv, L);
 }
@@ -333,11 +352,15 @@ function eliminate(S, inv, why, L) {
   if (S.ada && S.ada.escort === inv.id) S.ada.escort = null;
   say(S, L, `${nm(inv)} is lost to ${why}. Their belongings lie where they fell.`, 'dire');
   if (!S.lastRound) {
-    S.lastRound = (S.step === 'inv' ? S.round : S.round + 1) + (CONFIG.graceRounds || 0);
+    S.lastRound = (S.step === 'inv' ? S.round : S.round + 1) + (S.grace != null ? S.grace : (CONFIG.graceRounds || 0));
     const left = S.lastRound - S.round + (S.step === 'inv' ? 1 : 0);
     story(S, 'One of you has fallen', `${nm(inv)} is gone. The rest of you have until the end of ${left <= 1 ? 'this investigator phase' : `round ${S.lastRound}`} to finish this — or Greywater keeps you all.`, 'dire');
   }
   if (!activeInv(S).length) end(S, 'lost', 'Every investigator has fallen. In the Day Room, five new chairs have been turned to face the lake.');
+}
+// a boss died (by any means): in goal C that is the win
+function bossDown(S) {
+  if (S.goal === 'C') end(S, 'won', 'Marrow’s arms drop mid-beat. All through the house a hundred voices stop on the same breath, as if someone had lifted a needle from a record. The black lake is only a lake again.');
 }
 function end(S, phase, text) {
   if (S.phase !== 'play') return;
@@ -350,7 +373,7 @@ function end(S, phase, text) {
 function revealRoom(S, rid, by) {
   const R = ROOMS[rid];
   if (S.rooms[rid].rev) return;
-  S.rooms[rid].rev = true;
+  S.rooms[rid].rev = true; if (by) stat(S, by.id, 'rooms');
   for (const [sp, k, id] of R.tokens) S.tokens.push({id, k, sp});
   if (R.dark) Object.keys(R.sp).forEach(s => S.dark[s] = true);
   const L = [];
@@ -551,6 +574,7 @@ function mythosPhase(S) {
   const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };
   if (S.phase === 'play' && CONFIG.noiseSummon && !(CONFIG.noiseSummon === 'once' && S.noiseSummoned) && S.noise && !S.monsters.some(m => m.type === 'orderly')) { const who = S.inv.find(i => i.id === S.noise); if (who && !who.out) { S.noiseSummoned = true; say(S, L, `Something heard the noise ${nm(who)} made. ` + spawn(S, 'orderly'), 'bad'); } }
   if (S.phase === 'play') section('— The monsters move —', activateMonsters);
+  if (S.phase === 'play' && S.goal === 'C') { const b = S.monsters.find(m => m.type === 'marrow'); if (b) activeInv(S).filter(i => roomOf(i.space) === roomOf(b.space)).forEach(i => { if (autoTest(S, i, 'will') < CONFIG.conductorAura) scare(S, i, 1, 'Marrow conducts, and the hymn pours through the room', L); else say(S, L, `${nm(i)} holds firm against the Conductor's hymn (Will).`); }); }
   if (S.phase === 'play') section('— Horror checks —', horrorChecks);
   if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
   S.noise = null;
@@ -568,14 +592,21 @@ function mythosPhase(S) {
 function gainEvidence(S, inv, key) {
   const E = EVIDENCE[key];
   if (S.evidence.includes(E.n)) return;
-  S.evidence.push(E.n);
+  S.evidence.push(E.n); stat(S, inv && inv.id, 'ev');
   log(S, `${nm(inv)} finds evidence: ${E.n} (${S.evidence.length}/${CONFIG.evidenceNeeded}).`, 'clue');
   story(S, `Evidence: ${E.n}`, E.t + `\n\nEvidence ${S.evidence.length} of ${CONFIG.evidenceNeeded}.`, 'evidence');
   if (S.evidence.length >= CONFIG.evidenceNeeded && !S.goal) theReveal(S);
 }
 function theReveal(S) {
-  S.goal = pick(['A', 'B']);
-  if (S.goal === 'A') {
+  S.goal = pick(CONFIG.goals);
+  if (S.goal === 'C') {
+    const t = 'There is no machine and no patient at the heart of this. There is only him. Dr. Marrow has stood in the lake water so long that the hymn runs through him like current through a wire: he is the Conductor, and while he stands, the Choir sings.\n\nYOUR GOAL: Find Dr. Marrow and bring him down. He is stronger than anything else in this house, and he is already coming for you. Weapons, spells and fire all hurt him.';
+    story(S, 'The Reveal: the Conductor', t, 'reveal');
+    const far = distFromInvestigators(S);
+    const cand = Object.keys(SP).filter(s => revealed(S, s) && !invAt(S, s).length).sort((a, b) => (far[b] ?? 0) - (far[a] ?? 0));
+    spawn(S, 'marrow', cand[0] || 'C2');
+    const boss = S.monsters.find(m => m.type === 'marrow'); if (boss) boss.hp = CONFIG.conductorHp[0] + CONFIG.conductorHp[1] * S.inv.length;
+  } else if (S.goal === 'A') {
     const t = 'The pieces fit together. Marrow built a machine — the Resonance Engine — in Hydrotherapy, to amplify the song of the lake. It is still running, and the hymn is building toward its final note.\n\nYOUR GOAL: Bring the Valve Wheel from the Boiler Room to the Engine in Hydrotherapy, then turn its valves until the lake water drains away from the machine (a pipe puzzle: Interact, steps equal to your Strength).\n\nDr. Marrow is waiting for you down there.';
     story(S, 'The Reveal: the Resonance Engine', t, 'reveal');
     if (S.rooms.hydro.rev) spawn(S, 'marrow', 'Y3'); else S.pendingBoss = 'Y3';
@@ -589,10 +620,11 @@ function theReveal(S) {
     const cand = Object.keys(SP).filter(s => revealed(S, s) && !invAt(S, s).length).sort((a, b) => (far[b] ?? 0) - (far[a] ?? 0));
     spawn(S, 'marrow', cand[0] || 'C2');
   }
-  log(S, 'The Reveal: ' + (S.goal === 'A' ? 'silence the Resonance Engine.' : 'lead Ada Wren out alive.'), 'clue');
+  log(S, 'The Reveal: ' + (S.goal === 'A' ? 'silence the Resonance Engine.' : S.goal === 'C' ? 'bring down Dr. Marrow, the Conductor.' : 'lead Ada Wren out alive.'), 'clue');
 }
 function goalText(S) {
   if (!S.goal) return `Act I · Find evidence (${S.evidence.length}/${CONFIG.evidenceNeeded})`;
   if (S.goal === 'A') return 'Act II · Silence the Engine';
+  if (S.goal === 'C') return 'Act II · Bring down Dr. Marrow';
   return S.ada && S.ada.escort ? 'Act II · Lead Ada to the front doors' : 'Act II · Find Ada Wren';
 }

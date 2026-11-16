@@ -441,3 +441,48 @@ function flavorAfter(id, sk, ok) {
   const F = FLAVOR[id]; if (!F) return '';
   return pick((ok ? F.ok : F.bad)[sk] || ['']);
 }
+
+/* Epilogues: a few lines on what became of each investigator, by how the night ended for them.
+   won: fine / wounded / insane / lost (fell, but the others finished it). taken: the night was lost. */
+const EPILOGUE = {
+  mara: {
+    fine: 'Mara Voss was back on a night ward within the month, in a hospital far from any lake. She is the calmest nurse they have ever had. She never hums, and she asks that the gramophone in the day room be kept unplugged.',
+    wounded: 'Mara dressed her own wounds on the drive back, one-handed, and did not let anyone help. The scars healed clean; she knows good work when she does it. She still wakes at three in the morning, on the hour, and listens.',
+    insane: 'Mara went back to nursing, and her patients say she is kind. But she counts them at every round — always to thirteen — and when the number comes out wrong, she counts again, and smiles, and tells no one.',
+    lost: 'They found Mara’s cap on the shore the next morning, dry, folded, as if set down with care. The others lived because of what she did in that house. The ward she trained on now bears a small brass plaque with her name.',
+    taken: 'Mara Voss is still on duty at Greywater. On quiet nights you can see a nurse’s lamp moving window to window, checking on patients who are all, now, singing.',
+  },
+  elias: {
+    fine: 'Elias Crane wrote it all down — four hundred pages, footnoted — and then locked the manuscript in a bank vault and gave the key to a solicitor with instructions he hopes are never opened. He has taken up gardening. He is very bad at it.',
+    wounded: 'Elias walks with a cane now, which he claims lends him gravitas. He sold his collection of occult texts, every one, to a buyer he first interviewed for three hours. He kept only the Latin primer.',
+    insane: 'Elias returned to his shop and resumed his cataloguing. The entries have grown strange: the same title, over and over, in a hand that gets larger page by page. Customers say he is charming, and that he hums.',
+    lost: 'Elias Crane’s spectacles were recovered from the house, one lens cracked. His notes, found in his coat, were what let the others finish it. His shop stands shuttered; someone leaves flowers at the door each autumn.',
+    taken: 'There is a new voice in the Greywater choir: an older man’s, precise, pronouncing every syllable exactly. He always did want to hear the words said aloud.',
+  },
+  dex: {
+    fine: 'Dex Holloway went back to the docks and never fought for money again. He trains kids at a gym on Tanner Street, for free. When they ask about the worst fight he ever had, he says it was against a building, and that he won on points.',
+    wounded: 'Dex’s right hand never closed properly again. He says that suits him: it was the hand that got him into trouble. He keeps the lucky coin on a string round his neck, and he has not been near water since.',
+    insane: 'Dex still shadow-boxes every morning. The neighbours have noticed that he moves in time to something, a slow steady beat, and that some mornings he stops, listens, and starts again from the count of one.',
+    lost: 'Dex Holloway went down swinging, and it took the whole house to put him there. The others carried his cap out with them. At the gym on Tanner Street they rang the bell ten times for him.',
+    taken: 'Something heavy walks the corridors of Greywater now, keeping the rhythm with its fists on the walls. It was a man once, and a fighter. It keeps perfect time.',
+  },
+  agnes: {
+    fine: 'Sister Agnes did not return to the convent. She took a room above a bakery and teaches children their letters. She has not found her faith again, exactly, but she has found that she can stand in a silent room without being afraid of it.',
+    wounded: 'Sister Agnes mends slowly, as the old do. She says the pain is a kind of proof: that it happened, that she stood, that something in her held when it mattered. She has started, cautiously, to pray again — only the short ones.',
+    insane: 'Sister Agnes went home to the convent after all. The sisters are glad of her. She sings at every office now, in a strong clear voice, and no one has yet remarked that she is always singing a single note.',
+    lost: 'Sister Agnes was found kneeling, hands folded, face quite calm. Whatever she met at the end, she met it the way she met everything. The others lit a candle for her at the first church they passed, and it burned all night.',
+    taken: 'The Greywater chapel has its congregation back, and a sister to lead them. She no longer doubts. That was the last thing the hymn took from her.',
+  },
+  juno: {
+    fine: 'Juno Reyes developed every plate herself. All of them came out black — every one — except a single frame of the front doors standing open at dawn. Her editor ran it on page nine. She keeps the negative in her wallet.',
+    wounded: 'Juno filed the story from a hospital bed, typing with one hand. Nobody believed a word of it, which she had expected. She has a limp now and a new camera, and she turns down any assignment that involves a lake.',
+    insane: 'Juno still takes photographs, hundreds of them, all of still water. She pins them to her walls in rows of thirteen and studies them for hours. She says that in one of them, eventually, something will look back.',
+    lost: 'Juno Reyes’s camera was found on the hall floor with one exposed plate. The others had it developed: it shows the four of them, mid-stride, alive — the last picture she ever took, and the proof that they got out.',
+    taken: 'Juno’s last photograph hangs in the Greywater day room. It shows the patients in rows, singing, and at the end of the back row a woman in a cloche hat, mouth open, holding a camera she will never lower.',
+  },
+};
+function epilogueFor(S, v) {
+  const E = EPILOGUE[v.id]; if (!E) return '';
+  if (S.phase !== 'won') return E.taken;
+  return v.out ? E.lost : v.insane ? E.insane : v.wounded ? E.wounded : E.fine;
+}

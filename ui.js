@@ -16,7 +16,7 @@ const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], 
   drawer: false, storyQ: [], showingStory: false, secretsShown: {}, undo: null, tour: null, camAnim: 0};
 
 // ------------------------------------------------------------ settings
-const SET_DEF = {text: 'm', fast: false, shake: true, follow: true, warnEnd: true, alert: true, director: true, pity: true};
+const SET_DEF = {text: 'm', fast: false, shake: true, follow: true, warnEnd: true, alert: true, director: true, pity: true, sound: true, ambience: true, hints: true};
 const SET = Object.assign({}, SET_DEF, (() => { try { return JSON.parse(localStorage.getItem('gw-settings') || '{}'); } catch (e) { return {}; } })());
 function applySettings() {
   const c = document.body.classList;
@@ -30,6 +30,9 @@ function showSettings() {
     ${row('follow', 'Camera follows the action', 'The board glides to whoever is acting, and to monsters that moved')}
     ${row('warnEnd', 'Warn before ending a turn early', 'Asks first if you still have actions left')}
     ${row('alert', 'Your-turn alert', 'A chime and a buzz when it is your turn (online games)')}
+    ${row('sound', 'Sound effects', 'Dice, doors, monsters and the Mythos bell')}
+    ${row('ambience', 'Ambience', 'A low drone, and the hymn that grows as the night runs out')}
+    ${row('hints', 'First-game hints', 'A short tip the first time each thing comes up')} <div class="setrow"><span>Show the hints again<small>Forget which tips you have already seen</small></span><button class="small" data-x="rehint">Reset</button></div>
     ${row('fast', 'Faster dice and pop-ups', 'Shorter dice rolls and animations')}
     ${row('shake', 'Screen shake', 'The jolt when the Mythos phase begins')}
     <div class="eyebrow" style="margin-top:14px">New games (the host's choice online)</div>
@@ -39,9 +42,10 @@ function showSettings() {
   m.addEventListener('click', e => {
     const t = e.target.closest('[data-text]');
     if (t) { SET.text = t.dataset.text; applySettings(); m.querySelectorAll('[data-text]').forEach(b => b.classList.toggle('primary', b.dataset.text === SET.text)); }
+    if (e.target.closest('[data-x="rehint"]')) { Hint.reset(); SET.hints = true; applySettings(); toast('Hints will be shown again.'); }
     if (e.target.closest('[data-x="ok"]')) m.remove();
   });
-  m.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.set; if (k) { SET[k] = e.target.checked; applySettings(); } });
+  m.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.set; if (k) { SET[k] = e.target.checked; applySettings(); if (typeof Snd !== 'undefined') Snd.sync(); if (k === 'hints' && !SET.hints) Hint.clear(); } });
 }
 
 // ------------------------------------------------------------ camera
@@ -82,10 +86,15 @@ async function runTour() {
   const stop = () => { cancelled = true; };
   document.addEventListener('pointerdown', stop, {once: true, capture: true});
   const wait = ms => new Promise(r => setTimeout(r, SET.fast ? ms / 2 : ms));
-  for (const sid of stops) {
+  for (const st of stops) {
     if (cancelled || !G.S || G.S.phase !== 'play') break;
-    const c = spCenter(sid); await camTo(c.x, c.y, 500); if (cancelled) break;
-    ping(sid); await wait(750);
+    const sid = st.to, c = spCenter(sid);
+    if (st.from && SP[st.from]) {
+      const a = spCenter(st.from); await camTo((a.x + c.x) / 2, (a.y + c.y) / 2, 450); if (cancelled) break;
+      const g = document.querySelector(`#board g[data-kind="mon"][data-id="${st.mid}"]`);
+      if (g) { slideEl(g, a.x - c.x, a.y - c.y, SET.fast ? 300 : 800); Snd.play('step'); await wait(850); }
+    } else { await camTo(c.x, c.y, 500); if (cancelled) break; }
+    ping(sid); await wait(st.from ? 350 : 750);
   }
   document.removeEventListener('pointerdown', stop, {capture: true});
   if (!cancelled && G.vb && G.S) { const v = G.S.inv.find(i => !i.out && mineInv(i)); if (v) { const c = spCenter(v.space); await camTo(c.x, c.y, 500); } else await camTo(home.x + home.w / 2, home.y + home.h / 2, 500); }
@@ -363,6 +372,7 @@ function topHTML(S) {
 }
 function goalHelp(S) {
   if (!S.goal) return `Explore the house and find ${CONFIG.evidenceNeeded} pieces of evidence about what Dr. Marrow did here. Evidence hides behind Search (🔍) and Interact (!) tokens.`;
+  if (S.goal === 'C') { const b = S.monsters.find(m => m.type === 'marrow'); return b ? `Dr. Marrow is in the ${ROOMS[roomOf(b.space)].n}. Bring him down: he has taken ${b.wounds} of ${monHp(b)} wounds. Weapons, spells, holy water and fire all hurt him. Fight together.` : 'Find Dr. Marrow and bring him down.'; }
   if (S.goal === 'A') {
     const holder = S.inv.find(v => !v.out && v.items.includes('valve'));
     return holder ? `${INVD(holder.id).name} has the Valve Wheel. Bring it to the Engine in Hydrotherapy and Interact to turn the valves (pipe puzzle, Strength).` : 'Find the Valve Wheel (search the Boiler Room), carry it to the Engine in Hydrotherapy, then Interact to turn the valves (pipe puzzle, Strength). Dr. Marrow guards it.';
@@ -379,6 +389,34 @@ function drawerHTML(S) {
     <div class="ev"><div class="eyebrow">Evidence ${S.evidence.length}/${CONFIG.evidenceNeeded}</div>${S.evidence.length ? S.evidence.map(e => `<div>• ${esc(e)}</div>`).join('') : '<small>None yet. Search and Interact tokens may hold it.</small>'}</div>
     <div class="log">${S.log.map(e => `<div class="${e.k || ''}">${esc(e.t)}</div>`).join('')}</div>`;
 }
+// tokens glide from where they were drawn last time to where they are now
+function tokenSpots(svg) {
+  const m = {};
+  svg.querySelectorAll('g[data-kind="inv"],g[data-kind="mon"]').forEach(g => { const c = g.querySelector('circle'); if (c) m[g.dataset.kind + g.dataset.id] = [+c.getAttribute('cx'), +c.getAttribute('cy')]; });
+  return m;
+}
+function slideEl(g, dx, dy, ms) {
+  g.style.transition = 'none'; g.style.transform = `translate(${dx}px,${dy}px)`;
+  g.getBoundingClientRect();
+  g.style.transition = `transform ${ms}ms cubic-bezier(.3,.1,.3,1)`; g.style.transform = 'translate(0px,0px)';
+}
+const SLIDES = {};
+function slideTokens(svg, was) {
+  const now = performance.now();
+  svg.querySelectorAll('g[data-kind="inv"],g[data-kind="mon"]').forEach(g => {
+    const key = g.dataset.kind + g.dataset.id, o = was[key], c = g.querySelector('circle'); if (!o || !c) return;
+    if (g.dataset.kind === 'mon' && G.tour && G.tour.some(t => String(t.mid) === g.dataset.id)) return;   // shown later, on the tour after the Mythos report
+    const x = +c.getAttribute('cx'), y = +c.getAttribute('cy'), dx = o[0] - x, dy = o[1] - y;
+    if (Math.abs(dx) + Math.abs(dy) >= 1) {
+      const ms = Math.min(900, 320 + Math.hypot(dx, dy) * 1.6);
+      SLIDES[key] = {x, y, dx, dy, t0: now, ms}; slideEl(g, dx, dy, ms);
+    } else {
+      // redrawn mid-slide (the board redraws often): carry on from where the token had got to
+      const a = SLIDES[key];
+      if (a && a.x === x && a.y === y && now < a.t0 + a.ms) { const k = 1 - (now - a.t0) / a.ms; slideEl(g, a.dx * k, a.dy * k, a.ms * k); }
+    }
+  });
+}
 function renderGame() {
   const S = G.S; if (!S) return;
   if (!$('#gameroot')) {
@@ -387,8 +425,10 @@ function renderGame() {
   }
   fitView(S);
   const svg = $('#board svg');
+  const was = tokenSpots(svg);
   svg.innerHTML = boardSVG(S);
   applyVB();
+  slideTokens(svg, was);
   $('#top').innerHTML = topHTML(S);
   $('#hud').innerHTML = hudHTML(S);
   const dr = $('#drawer'); dr.hidden = !G.drawer; if (G.drawer) dr.innerHTML = drawerHTML(S);
@@ -566,7 +606,8 @@ function rollTest(D, inv, sk, o = {}) {
       const canSpend = !keen && !dark && faces.includes('C') && left > 0;
       $('#dctrl', m).innerHTML = `${canSpend ? `<button data-x="spend">Spend a Clue: 🔍 → ✦ <small>(${left} left)</small></button>` : ''}<button class="primary" data-x="ok">Continue</button>`;
     };
-    setTimeout(() => { clearInterval(iv); drawD(); }, SET.fast ? 180 : 650);
+    Snd.play('dice'); Hint.show('dice');
+    setTimeout(() => { clearInterval(iv); drawD(); Snd.play((o.need ? succ() >= o.need : succ() > 0) ? 'pass' : 'fail'); }, SET.fast ? 180 : 650);
     m.addEventListener('click', e => {
       const b = e.target.closest('[data-x]'); if (!b) return;
       if (b.dataset.x === 'spend') { const i = faces.indexOf('C'); if (i >= 0 && inv.clues - spent > 0) { faces[i] = 'X'; spent++; drawD(); } }
@@ -575,6 +616,7 @@ function rollTest(D, inv, sk, o = {}) {
         inv.clues -= spent;
         const s = succ();
         pityMark(inv, pkey, o.need ? s >= o.need : s > 0);
+        stat(D, inv.id, 'rolls'); if (o.need ? s >= o.need : s > 0) stat(D, inv.id, 'passes');
         D.rseq = (D.rseq || 0) + 1;
         D.roll = {seq: D.rseq, who: inv.id, label: o.label || SKILL_NAMES[sk], faces: faces.slice(), succ: s, flav: after ? after.t : ''};
         G.myRolls.add(D.rseq);
@@ -628,15 +670,34 @@ function mythosBody(text) {
   const who = G.mode === 'online' ? 'What happened to you' : 'What happened to your investigators';
   return `<p>${esc(flavor)}</p>${mine.length ? `<div class="mine"><div class="eyebrow">${who}</div><ul class="mlist">${mine.map(li).join('')}</ul></div>` : (names.length ? `<div class="mine calm"><div class="eyebrow">${who}</div><p>Nothing touched ${G.mode === 'online' ? 'you' : 'them'} this time.</p></div>` : '')}${restHTML ? `<div class="eyebrow" style="margin-top:12px">Around the house</div>${restHTML}` : ''}`;
 }
+// end of the game: what happened, who did what, and what became of each investigator
+function showSummary(S) {
+  const won = S.phase === 'won', st = S.stats || {};
+  const goal = {A: 'Silence the Resonance Engine', B: 'Lead Ada Wren out', C: 'Bring down Dr. Marrow'}[S.goal] || 'Never discovered';
+  const top = k => { let best = null, bv = 0; S.inv.forEach(v => { const x = (st[v.id] || {})[k] || 0; if (x > bv) { bv = x; best = v.id; } }); return best; };
+  const titles = {}; [['kills', 'The Fighter'], ['ev', 'The Sleuth'], ['rooms', 'The Pathfinder'], ['dmg', 'The Shield'], ['searches', 'The Scavenger'], ['hor', 'The Haunted']].forEach(([k, t]) => { const id = top(k); if (id && !titles[id]) titles[id] = t; });
+  const chip = (n, label) => n ? `<span class="stat">${label} <b>${n}</b></span>` : '';
+  const rows = S.inv.map(v => {
+    const d = INVD(v.id), x = st[v.id] || {};
+    const fate = v.out ? 'Lost' : v.insane && v.wounded ? 'Wounded · Insane' : v.insane ? 'Insane' : v.wounded ? 'Wounded' : won ? 'Unharmed' : 'Taken';
+    return `<div class="sumrow"><div class="sh-head">${portraitSVG(v.id, 56)}<div><h3>${esc(d.name)}${titles[v.id] ? ` <small class="ttl">${titles[v.id]}</small>` : ''}</h3><div class="role">${esc(d.role)} · <b class="${v.out || !won ? 'w' : ''}">${fate}</b></div></div></div>
+      <div class="stats">${chip(x.rooms, 'Rooms opened')}${chip(x.searches, 'Searches')}${chip(x.ev, 'Evidence')}${chip(x.kills, 'Monsters destroyed')}${chip(x.dealt, 'Damage dealt')}${chip(x.dmg, 'Damage taken')}${chip(x.hor, 'Horror taken')}${chip(x.rolls ? `${x.passes || 0}/${x.rolls}` : 0, 'Tests passed')}</div>
+      <p class="epi">${esc(epilogueFor(S, v))}</p></div>`;
+  }).join('');
+  const diff = (DIFF[(S.opt || {}).diff] || DIFF.std).n;
+  return info(won ? 'The night is over' : 'Greywater keeps its own', `<div class="eyebrow">${won ? 'Victory' : 'Defeat'} · ${diff} · ${S.round} rounds</div>
+    <div class="stats" style="margin:8px 0 4px"><span class="stat">Goal <b>${goal}</b></span><span class="stat">Evidence <b>${S.evidence.length}/${CONFIG.evidenceNeeded}</b></span><span class="stat">Rooms found <b>${Object.values(S.rooms).filter(r => r.rev).length}/${Object.keys(S.rooms).length}</b></span></div>${rows}`, 'Close', 'story summary');
+}
 async function pumpStories() {
   if (G.showingStory) return;
   G.showingStory = true;
   while (G.storyQ.length) {
     const s = G.storyQ.shift();
     if (s.kind === 'mythos' && SET.shake) { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500); }
+    Snd.play({mythos: 'gong', evidence: 'chime', reveal: 'reveal', won: 'win', lost: 'lose', room: 'door', dire: 'sting'}[s.kind]);
     const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: 'Chapter 1', insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
     await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${s.kind === 'mythos' ? mythosBody(s.text) : para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
-    if ((s.kind === 'won' || s.kind === 'lost') && G.S) await showInsanityResults(G.S);
+    if ((s.kind === 'won' || s.kind === 'lost') && G.S) { await showInsanityResults(G.S); await showSummary(G.S); }
   }
   G.showingStory = false;
   if (G.afterStories) { const f = G.afterStories; G.afterStories = null; f(); }
@@ -699,6 +760,7 @@ async function doAction(kind, arg) {
     await commit(D);
     G.undo = undoable && G.S && G.S.gid === S.gid ? {prev: S, rev: G.S.rev, what} : null;
     if (G.undo) render();
+    if (kind === 'move') Snd.play('step');
     if (inv && kind === 'move') camFollow(D.inv[D.active >= 0 ? D.active : S.active].space);
     if (kind === 'start' && D.active >= 0) camFollow(D.inv[D.active].space);
   } catch (e) { console.error(e); toast('Something went wrong: ' + (e && e.message || e)); }
@@ -729,7 +791,8 @@ function onState(S, force) {
   if (G.undo && S.rev !== G.undo.rev) G.undo = null;
   if (prev && S.round > prev.round && S.phase === 'play') {
     const was = {}; prev.monsters.forEach(m => was[m.mid] = m.space);
-    G.tour = [...new Set(S.monsters.filter(m => was[m.mid] !== m.space).map(m => m.space))].slice(0, 6);
+    G.tour = S.monsters.filter(m => was[m.mid] !== m.space).map(m => ({mid: m.mid, from: was[m.mid] || null, to: m.space})).slice(0, 6);
+    if (S.monsters.length > prev.monsters.length && typeof Snd !== 'undefined') setTimeout(() => Snd.play('sting'), 400);
   }
   G.S = S; G.screen = 'game';
   if (G.seenR == null) G.seenR = S.rseq;
@@ -740,7 +803,10 @@ function onState(S, force) {
   // other players' turns: follow whoever is acting
   if (prev && G.mode === 'online' && S.active >= 0 && !mineInv(S.inv[S.active]) && (prev.active !== S.active || prev.inv[S.active].space !== S.inv[S.active].space)) camFollow(S.inv[S.active].space);
   queueStories(S);
-  if (!G.showingStory) { turnAlert(prev, S); if (G.tour) runTour(); } else G.afterStories = () => { turnAlert(prev, S); if (G.tour) runTour(); };
+  Snd.sync();
+  if (prev && S.inv.some((v, i) => prev.inv[i] && (v.dmg.length > prev.inv[i].dmg.length) && mineInv(v)) && S.round === prev.round) Snd.play('hurt');
+  const after = () => { turnAlert(prev, S); if (G.tour) runTour(); Hint.check(prev, S); };
+  if (!G.showingStory) after(); else G.afterStories = after;
   checkSecrets(S);
 }
 function saveLocal(S) { try { localStorage.setItem('gw-local', JSON.stringify(S)); } catch (e) {} }
@@ -793,6 +859,7 @@ async function showInsanityResults(S) {
 
 // --------------------------------------------------------------- screens
 function render() {
+  if (typeof Snd !== 'undefined') { Snd.sync(); if (G.screen !== 'game') Hint.clear(); }
   if (G.screen === 'game') return renderGame();
   if (G.screen === 'home') renderHome();
   else if (G.screen === 'setup') renderSetup();
@@ -825,12 +892,17 @@ function renderHome() {
   </div>`;
   $('#code').value = codeVal; $('#pname').value = nameVal;
 }
+function diffPicker(canPick, cur) {
+  cur = cur || G.diff || 'std';
+  return `<div class="card diffc"><h2>Difficulty</h2><div class="seg">${Object.entries(DIFF).map(([k, d]) => `<button class="${cur === k ? 'primary' : ''}" ${canPick ? `data-act="diff" data-d="${k}"` : 'disabled'}>${d.n}</button>`).join('')}</div><p class="dim" style="margin:8px 0 0">${DIFF[cur].sub}</p></div>`;
+}
 function renderSetup() {
   const p = G.localPicks;
   app.innerHTML = `<div class="home">
     <div class="row" style="justify-content:space-between"><h2 style="font-size:30px">Choose investigators</h2><button class="ghost small" data-act="home">Back</button></div>
     <p class="dim">Pick 2 to 4. Playing alone? Pick two and control both.</p>
     <div class="invgrid">${INVESTIGATORS.map(d => { const i = p.indexOf(d.id); return invCard(d, i >= 0 ? `<span class="tag">#${i + 1}</span>` : '', i >= 0 ? 'mine' : '', `data-act="lpick" data-id="${d.id}"`); }).join('')}</div>
+    ${diffPicker(true)}
     <div class="row" style="margin-top:16px"><button class="primary" data-act="lbegin" ${p.length >= 2 ? '' : 'disabled'}>Enter Greywater</button></div></div>`;
 }
 function renderLobby() {
@@ -844,6 +916,7 @@ function renderLobby() {
     <div class="card"><h2>At the door</h2><div class="list">${(L.seats || []).map(s => `<div class="row" style="justify-content:space-between"><span>${esc(pname(s.uid))}${s.uid === L.host ? ' <small>(host)</small>' : ''}</span><small>${(s.picks || []).filter(id => c[id] === s.uid).map(id => INVD(id).name).join(', ') || 'choosing…'}</small></div>`).join('')}</div></div>
     <div class="card"><h2>Choose your investigators</h2><p class="dim" style="margin:0">Tap to claim. 2 to 4 in total — one player may control several.</p>
       <div class="invgrid">${INVESTIGATORS.map(d => { const o = c[d.id], mine = o === G.me, taken = o && !mine; return invCard(d, mine ? '<span class="tag">Yours</span>' : taken ? `<span class="tag">${esc(pname(o))}</span>` : '', mine ? 'mine' : taken ? 'taken' : '', seated && !taken ? `data-act="spick" data-id="${d.id}"` : 'disabled'); }).join('')}</div>
+      ${diffPicker(isHost, L.diff)}
       <div class="row" style="margin-top:16px">${isHost ? `<button class="primary" data-act="obegin" ${n >= 2 ? '' : 'disabled'}>Enter Greywater</button>${n < 2 ? '<small class="dim">At least 2 investigators.</small>' : ''}` : `<small>Waiting for ${esc(pname(L.host))} to begin…</small>`}</div></div></div>`;
 }
 function showRules() {
@@ -876,7 +949,7 @@ document.addEventListener('click', async e => {
     case 'install': showInstall(); break;
     case 'setup': G.localPicks = []; G.screen = 'setup'; render(); break;
     case 'lpick': { const i = G.localPicks.indexOf(b.dataset.id); if (i >= 0) G.localPicks.splice(i, 1); else if (G.localPicks.length < 4) G.localPicks.push(b.dataset.id); render(); break; }
-    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'}))); N.mode = 'local'; N.opt = {dir: SET.director, pity: SET.pity}; saveLocal(N); onState(N); break; }
+    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {dir: SET.director, pity: SET.pity, diff: G.diff || 'std'}); N.mode = 'local'; saveLocal(N); onState(N); break; }
     case 'resume': { const L = loadLocal(); if (L) { clearSubs(); G.mode = 'local'; G.seenStory = L.storySeq; G.seenR = L.rseq; G.S = null; app.innerHTML = ''; onState(L); } break; }
     case 'host': hostGame(); break;
     case 'rehost': { const h = loadHost(); if (h) hostGame(h); break; }
@@ -899,6 +972,7 @@ document.addEventListener('click', async e => {
       doAction('endturn'); break;
     }
     case 'undo': undoLast(); break;
+    case 'diff': G.diff = b.dataset.d; if (G.screen === 'lobby' && G.lobby && G.lobby.host === G.me) { G.lobby.diff = G.diff; if (typeof broadcast === 'function') broadcast({t: 'lobby', L: G.lobby}); } render(); break;
     case 'settings': showSettings(); break;
     case 'endphase': closeSheet(); doAction('endphase'); break;
     case 'space': {

@@ -6,9 +6,9 @@
 const SPELLS = {
   wither: {n: 'Withering Word', type: 'attack', front: 'Attack a monster within range (your room), testing Lore. Then flip.',
     backs: [
-      {t: 'Deal damage equal to your successes. If you rolled 3 or more, you also suffer 1 Horror.', fx: (D, inv, s, m) => { hitMonster(D, m, s, `${nm(inv)}'s Withering Word strikes`); if (s >= 3) scare(D, inv, 1, 'the word takes something back'); }},
-      {t: 'Deal your successes +1 damage. If you rolled 0, suffer 2 Horror.', fx: (D, inv, s, m) => { if (s === 0) scare(D, inv, 2, 'the word turns inward'); else hitMonster(D, m, s + 1, `${nm(inv)}'s Withering Word strikes`); }},
-      {t: 'Deal damage equal to your successes. If the monster is destroyed, gain 1 Clue.', fx: (D, inv, s, m) => { const before = D.monsters.includes(m); hitMonster(D, m, s, `${nm(inv)}'s Withering Word strikes`); if (before && !D.monsters.includes(m)) { inv.clues++; log(D, `${nm(inv)} understands it a little better as it dies (+1 Clue).`, 'clue'); } }},
+      {t: 'Deal damage equal to your successes. If you rolled 3 or more, you also suffer 1 Horror.', fx: (D, inv, s, m) => { hitMonster(D, m, s, `${nm(inv)}'s Withering Word strikes`, inv.id); if (s >= 3) scare(D, inv, 1, 'the word takes something back'); }},
+      {t: 'Deal your successes +1 damage. If you rolled 0, suffer 2 Horror.', fx: (D, inv, s, m) => { if (s === 0) scare(D, inv, 2, 'the word turns inward'); else hitMonster(D, m, s + 1, `${nm(inv)}'s Withering Word strikes`, inv.id); }},
+      {t: 'Deal damage equal to your successes. If the monster is destroyed, gain 1 Clue.', fx: (D, inv, s, m) => { const before = D.monsters.includes(m); hitMonster(D, m, s, `${nm(inv)}'s Withering Word strikes`, inv.id); if (before && !D.monsters.includes(m)) { inv.clues++; log(D, `${nm(inv)} understands it a little better as it dies (+1 Clue).`, 'clue'); } }},
     ]},
   binding: {n: 'Binding Thread', type: 'action', target: 'monster', front: 'Choose a monster within range (your room). Test Lore, then flip.',
     backs: [
@@ -112,7 +112,7 @@ function fireHurtsMon(D, m, L) {
   const M = MONSTERS[m.type];
   m.wounds += 1;
   say(D, L, `The ${M.n.replace(/^The /, "")} burns.`, 'good');
-  if (m.wounds >= M.hp) { D.monsters = D.monsters.filter(x => x !== m); say(D, L, `The ${M.n.replace(/^The /, "")} is destroyed by the fire.`, 'good'); }
+  if (m.wounds >= monHp(m)) { D.monsters = D.monsters.filter(x => x !== m); say(D, L, `The ${M.n.replace(/^The /, "")} is destroyed by the fire.`, 'good'); if (M.boss) bossDown(D); }
 }
 
 // ================================================================ PUZZLES

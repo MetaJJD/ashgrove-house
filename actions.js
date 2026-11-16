@@ -172,6 +172,7 @@ const ACT = {
     if (!tok) return false;
     if (!(await ctx.gate())) return true;
     const spot = D.spots[id], info = SEARCH[id];
+    stat(D, inv.id, 'searches');
     if (info && info.test) {
       const s = await ctx.test(info.test[0], {label: info.test[2], need: info.test[1]});
       if (s < info.test[1]) { log(D, `${nm(inv)} can't get at it yet (${info.n}).`); return true; }
@@ -199,7 +200,7 @@ const ACT = {
     const M = MONSTERS[m.type];
     const s = await ctx.test(W.skill, {label: `Attack the ${M.n} with ${a.weapon === 'fists' ? 'your fists' : ITEMS[a.weapon].n}`, bonus: W.bonus});
     const dmg = s + (s > 0 && W.melee && inv.id === 'dex' ? 1 : 0);
-    hitMonster(D, m, dmg, `${nm(inv)} attacks`);
+    hitMonster(D, m, dmg, `${nm(inv)} attacks`, inv.id);
     return true;
   },
   async use(D, inv, a, ctx) {
@@ -209,7 +210,7 @@ const ACT = {
       const m = D.monsters.find(x => x.mid === a.mid && x.space === inv.space);
       if (!m) return false;
       inv.items.splice(idx, 1);
-      hitMonster(D, m, 2, `${nm(inv)} hurls holy water`);
+      hitMonster(D, m, 2, `${nm(inv)} hurls holy water`, inv.id);
       return true;
     }
     const t = D.inv.find(i => i.id === a.target && !i.out && i.space === inv.space);
@@ -281,14 +282,15 @@ const ACT = {
     return 'free';
   },
 };
-function hitMonster(D, m, dmg, who) {
+function hitMonster(D, m, dmg, who, by) {
   const M = MONSTERS[m.type];
   if (dmg <= 0) { log(D, `${who}, but the ${M.n} is untouched.`); return; }
-  m.wounds += dmg;
-  if (m.wounds >= M.hp) {
-    D.monsters = D.monsters.filter(x => x !== m);
+  m.wounds += dmg; stat(D, by, 'dealt', dmg);
+  if (m.wounds >= monHp(m)) {
+    D.monsters = D.monsters.filter(x => x !== m); stat(D, by, 'kills');
     log(D, `${who} for ${dmg}. The ${M.n} is destroyed.`, 'good');
-    if (M.boss) story(D, 'Dr. Marrow falls', 'Marrow folds to the floor like an empty coat. His baton keeps twitching in time for a while after. It doesn’t end the song — but nobody is conducting it now.', 'story');
+    if (M.boss && D.goal === 'C') bossDown(D);
+    else if (M.boss) story(D, 'Dr. Marrow falls', 'Marrow folds to the floor like an empty coat. His baton keeps twitching in time for a while after. It doesn’t end the song — but nobody is conducting it now.', 'story');
   } else log(D, `${who} for ${dmg}. The ${M.n} is hurt.`);
 }
 const NO_EVADE = ['attack', 'start', 'endturn', 'endphase', 'extinguish'];

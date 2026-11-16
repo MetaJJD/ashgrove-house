@@ -215,8 +215,7 @@ function beginOnline() {
   const c = claims();
   const order = INVESTIGATORS.map(d => d.id).filter(id => c[id]);
   if (order.length < 2) { toast('Choose at least 2 investigators.'); return; }
-  const S = newGame(order.map(id => ({id, owner: c[id]})));
-  S.opt = {dir: SET.director, pity: SET.pity};
+  const S = newGame(order.map(id => ({id, owner: c[id]})), {dir: SET.director, pity: SET.pity, diff: G.lobby.diff || 'std'});
   Object.assign(S, {code: G.code, host: G.me, created: G.lobby.created, mode: 'online',
     players: [...new Set([G.me, ...order.map(id => c[id])])], names: Object.fromEntries(G.lobby.seats.map(s => [s.uid, s.name]))});
   hostAccept(S);

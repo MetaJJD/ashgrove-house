@@ -10,6 +10,7 @@ const DIRECTOR = {cap: 0.10, dead: 0.4, span: 0.5, center: -0.2, pityStep: 0.10,
 
 function dirProgress(S) {
   if (!S.goal) return 0.5 * Math.min(1, S.evidence.length / CONFIG.evidenceNeeded);
+  if (S.goal === 'C') { const b = S.monsters.find(m => m.type === 'marrow'); return b ? 0.5 + 0.45 * b.wounds / monHp(b) : 0.5; }
   if (S.goal === 'A') { const h = S.inv.find(v => !v.out && v.items.includes('valve')); return !h ? 0.5 : roomOf(h.space) === 'hydro' ? 0.85 : 0.7; }
   const a = S.ada; if (!a || !a.found) return 0.5;
   if (!a.escort) return 0.6;

@@ -155,6 +155,9 @@ button.undo{border-color:#c9a04a;color:#f0d28a}
 .mine{background:rgba(184,66,58,.13);border:1px solid rgba(184,66,58,.45);border-radius:10px;padding:10px 14px;margin:10px 0}.mine.calm{background:rgba(120,160,130,.1);border-color:rgba(120,160,130,.35)}.mine p{margin:4px 0 0}
 .mlist{margin:6px 0 0;padding-left:20px}.mlist li{margin:3px 0}.mlist li.bad{color:#ff9a8f}.mlist li.good{color:#b9d6b0}.msec{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#a39680;margin:10px 0 2px}
 .goalbox .gt{font-size:19px;color:#f0d28a;margin:2px 0 4px}.goalbox p{margin:4px 0;font-size:15px;line-height:1.4}.goalbox .dl{color:#ff9a8f}.goalbox .hint{color:#b9d6b0}
+.hintcard{position:fixed;left:50%;transform:translateX(-50%);bottom:108px;z-index:90;max-width:min(520px,92vw);background:linear-gradient(180deg,#2a2418,#1a160f);border:1px solid #c9a04a;border-radius:12px;padding:12px 16px;box-shadow:0 10px 40px #000;animation:fade .3s}.hintcard p{margin:6px 0 10px;line-height:1.4}.hintcard .eyebrow{color:#f0d28a}
+.diffc .seg{justify-content:flex-start}.diffc .seg button{min-width:96px}
+.sumrow{border-top:1px solid var(--line);padding:12px 0 4px;margin-top:10px}.sumrow h3{margin:0;font-size:21px}.sumrow .ttl{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#f0d28a;border:1px solid #c9a04a;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle}.sumrow .stats{margin:8px 0}.sumrow .epi{font-style:italic;color:#d9cdb2;line-height:1.45;margin:6px 0}.modal.summary{max-width:680px}
 .dflav{font-style:italic;color:#cdbf9f;text-align:center;margin:4px 6px 10px;line-height:1.4}.dout{display:block;font-style:italic;color:#e6dcc2;margin-top:6px}
 .dsum{text-align:center;font-size:19px}
 .tf{display:inline-flex;gap:4px}.tf .f{font-style:normal;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:5px;background:#3a2e26;font-size:14px}.tf .S,.tf .X{background:#d3962f}.tf .C{background:#5c6cbd}
@@ -199,6 +202,7 @@ button.stop{min-height:40px;font-size:15px}
 <script src="puzzles.js"></script>
 <script src="flavor.js"></script>
 <script src="ui.js"></script>
+<script src="feel.js"></script>
 <script src="net.js"></script>
 <script>applySettings(); render(); initCaps();</script>
 </body>
