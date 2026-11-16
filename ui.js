@@ -383,6 +383,7 @@ function goalHelp(S) {
 }
 function drawerHTML(S) {
   return `<div class="dh"><h3>Journal</h3><button class="small ghost" data-act="drawer">Close</button></div>
+    ${S.pro ? `<div class="ev"><div class="eyebrow">Tonight · ${esc(S.pro.t)}</div><div>${esc(S.pro.choice)}</div><small>${esc(S.pro.sum)}</small></div>` : ''}
     <div class="ev goalbox"><div class="eyebrow">Your goal</div><div class="gt">${esc(goalText(S))}</div><p>${esc(goalHelp(S))}</p>
       ${S.lastRound && S.phase === 'play' ? `<p class="dl">One of you has fallen. You have until the end of round ${S.lastRound}.</p>` : ''}
       ${(() => { const h = !S.goal && S.log.find(e => e.t.startsWith('The hymn falters')); return h ? `<p class="hint"><b>Latest lead:</b> ${esc(h.t.replace(/^The hymn falters for a moment, and in the silence you are sure of it: /, '').replace(/^s/, 'S'))}</p>` : ''; })()}</div>
@@ -645,7 +646,7 @@ const EVENT_THEME = {
   radiators: ['#6b3b1f', 'pipes'], bell: ['#5a4a2a', 'sound'], lights: ['#2b2a3a', 'dark'], name: ['#3a2f4a', 'sound'],
   breath: ['#2f4a5a', 'calm'], footsteps: ['#2a4250', 'steps'], gramophone: ['#5a3a2a', 'sound'], cold: ['#1f3f5a', 'water'],
   whisper: ['#2a2238', 'dark'], seep: ['#1f3a50', 'water'], quiet: ['#26262a', 'calm'], hymn: ['#3d2f5a', 'sound'],
-  settles: ['#4a3a2a', 'pipes'], sing: ['#1f3550', 'water'], swells: ['#4a2f3f', 'sound'],
+  road: ['#2a3340', 'water'], settles: ['#4a3a2a', 'pipes'], sing: ['#1f3550', 'water'], swells: ['#4a2f3f', 'sound'],
 };
 function storyPic(img) {
   if (!img) return '';
@@ -912,6 +913,16 @@ function diffPicker(canPick, cur) {
   cur = cur || G.diff || 'std';
   return `<div class="card diffc"><h2>Difficulty</h2><div class="seg">${Object.entries(DIFF).map(([k, d]) => `<button class="${cur === k ? 'primary' : ''}" ${canPick ? `data-act="diff" data-d="${k}"` : 'disabled'}>${d.n}</button>`).join('')}</div><p class="dim" style="margin:8px 0 0">${DIFF[cur].sub}</p></div>`;
 }
+// the road to the house: one situation, two choices, effects for this scenario only
+function choosePrologue() {
+  const P = pick(PROLOGUES);
+  return new Promise(res => {
+    const opt = c => `<button data-c="${c}"><span><b>${esc(P[c].t)}</b><br><small>${esc(P[c].d)}</small><br><small class="pfx">${esc(prologueFx(P[c].fx))}</small></span></button>`;
+    const m = openModal(`${storyPic('road')}<div class="eyebrow">On the road to Greywater</div><h2>${esc(P.t)}</h2><p>${esc(P.s)}</p>
+      <div class="list">${opt('a')}${opt('b')}</div><p class="dim" style="margin-bottom:0">Decide together. It lasts for this scenario only.</p><div class="btns"><button class="ghost small" data-c="x">Back</button></div>`, 'story');
+    m.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; m.remove(); res(b.dataset.c === 'x' ? null : {id: P.id, c: b.dataset.c}); });
+  });
+}
 function legacyPicker(canPick, on) {
   return `<label class="card setrow legacyc"><span><b>Legacy mode</b><small>Investigators remember this night and carry rewards, keepsakes and scars into later scenarios. Death is permanent.${canPick ? '' : ' (The host decides.)'}</small></span><input type="checkbox" data-act="legacy" ${on ? 'checked' : ''} ${canPick ? '' : 'disabled'}></label>`;
 }
@@ -974,7 +985,7 @@ document.addEventListener('click', async e => {
     case 'install': showInstall(); break;
     case 'setup': G.localPicks = []; G.screen = 'setup'; render(); break;
     case 'lpick': { const i = G.localPicks.indexOf(b.dataset.id); if (i >= 0) G.localPicks.splice(i, 1); else if (G.localPicks.length < 4) G.localPicks.push(b.dataset.id); render(); break; }
-    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {dir: SET.director, pity: SET.pity, diff: G.diff || 'std', legacy: G.legacy ? legacyFor(G.localPicks) : null}); N.mode = 'local'; saveLocal(N); onState(N); break; }
+    case 'lbegin': { const pro = await choosePrologue(); if (!pro) break; clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {dir: SET.director, pity: SET.pity, diff: G.diff || 'std', legacy: G.legacy ? legacyFor(G.localPicks) : null, prologue: pro}); N.mode = 'local'; saveLocal(N); onState(N); break; }
     case 'resume': { const L = loadLocal(); if (L) { clearSubs(); G.mode = 'local'; G.seenStory = L.storySeq; G.seenR = L.rseq; G.S = null; app.innerHTML = ''; onState(L); } break; }
     case 'host': hostGame(); break;
     case 'rehost': { const h = loadHost(); if (h) hostGame(h); break; }

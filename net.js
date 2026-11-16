@@ -211,18 +211,19 @@ function toggleSeatPick(id) {
   else if (!send(G.net.conn, {t: 'picks', picks, lg: legacyFor(picks, true)})) toast('Not connected to the host right now.');
   render();
 }
-function beginOnline() {
+async function beginOnline() {
   if (!G.net || G.net.role !== 'host') return;
   const c = claims();
   const order = INVESTIGATORS.map(d => d.id).filter(id => c[id]);
   if (order.length < 2) { toast('Choose at least 2 investigators.'); return; }
+  const prologue = await choosePrologue(); if (!prologue) return;
   let legacy = null;
   if (G.lobby.legacy) {
     legacy = {};
     const mine = order.filter(id => c[id] === G.me), own = legacyFor(mine);
     for (const id of order) legacy[id] = c[id] === G.me ? own[id] : ((G.lobby.seats.find(s => s.uid === c[id]) || {}).lg || {})[id] || {};
   }
-  const S = newGame(order.map(id => ({id, owner: c[id]})), {dir: SET.director, pity: SET.pity, diff: G.lobby.diff || 'std', legacy});
+  const S = newGame(order.map(id => ({id, owner: c[id]})), {dir: SET.director, pity: SET.pity, diff: G.lobby.diff || 'std', legacy, prologue});
   Object.assign(S, {code: G.code, host: G.me, created: G.lobby.created, mode: 'online',
     players: [...new Set([G.me, ...order.map(id => c[id])])], names: Object.fromEntries(G.lobby.seats.map(s => [s.uid, s.name]))});
   hostAccept(S);

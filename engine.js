@@ -267,9 +267,10 @@ function newGame(picks, opt = {}) {
     mythosUsed: [], log: [], stories: [], storySeq: 0, rseq: 0, roll: null, result: null, revealed: {}, stats: {},
   };
   if (opt.legacy) applyLegacy(S, opt.legacy);
+  if (opt.prologue && typeof applyPrologue === 'function') applyPrologue(S, opt.prologue);
   revealRoom(S, 'hall', null);
   story(S, 'The Greywater Choir', 'Autumn, 1926. A letter from Dr. Hollis Marrow, director of Greywater Sanatorium, reached each of you on the same morning: “Come quickly. The patients have begun to sing.”\n\nYou arrive at dusk. The building on the black lake is silent. The front doors close behind you — and lock.\n\nFind out what happened at Greywater.', 'intro');
-  if (S.lgIntro) { story(S, 'Old wounds, old friends', S.lgIntro, 'story'); delete S.lgIntro; }
+  if (S.lgIntro) { story(S, S.lgTitle || 'Old wounds, old friends', S.lgIntro, 'story'); delete S.lgIntro; delete S.lgTitle; }
   log(S, 'Round 1. Find out what happened at Greywater.', 'round');
   return S;
 }
@@ -296,6 +297,7 @@ function skillVal(S, inv, sk) {
   for (const c of inv.dmg) { const C = DMG_CARDS[c]; if (C.up && C.mod && C.mod[sk]) v += C.mod[sk]; }
   for (const c of inv.hor) { const C = HOR_CARDS[c]; if (C.up && C.mod && C.mod[sk]) v += C.mod[sk]; }
   for (const k of inv.items) { const I = ITEMS[k]; if (I && I.mod && I.mod[sk]) v += I.mod[sk]; }
+  if (S && S.pro && S.pro.sk && S.pro.sk[sk]) v += S.pro.sk[sk];
   if (inv.lg) { v += (inv.lg.sk && inv.lg.sk[sk]) || 0; if (inv.scarFresh && inv.scarFresh[sk]) v -= 1; }
   return Math.max(1, v);
 }
@@ -593,6 +595,7 @@ const beatsOf = S => S.beatAt || [4, 8, 12];
 function mythosPhase(S) {
   const L = [];
   S.step = 'mythos';
+  if (S.proSpawn) { L.push('Something heard you coming. ' + spawn(S, S.proSpawn)); delete S.proSpawn; }
   if (S.lastRound && S.round >= S.lastRound) {
     end(S, 'lost', 'You ran out of time after one of you fell. The doors of Greywater never open again.');
     S.step = 'inv'; return;
