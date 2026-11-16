@@ -385,7 +385,7 @@ function topHTML(S) {
 const goalHelp = S => SCN.goalHelp(S);
 function drawerHTML(S) {
   return `<div class="dh"><h3>Journal</h3><button class="small ghost" data-act="drawer">Close</button></div>
-    ${S.pro ? `<div class="ev"><div class="eyebrow">Tonight · ${esc(S.pro.t)}</div><div>${esc(S.pro.choice)}</div><small>${esc(S.pro.sum)}</small></div>` : ''}
+    ${S.pro ? `<div class="ev"><div class="eyebrow">On the road · ${esc(S.pro.t)}</div><div>${esc(S.pro.choice)}</div></div>` : ''}
     <div class="ev goalbox"><div class="eyebrow">Your goal</div><div class="gt">${esc(goalText(S))}</div><p>${esc(goalHelp(S))}</p>
       ${S.lastRound && S.phase === 'play' ? `<p class="dl">One of you has fallen. You have until the end of round ${S.lastRound}.</p>` : ''}
       ${!S.goal && S.lastHint ? `<p class="hint"><b>Latest lead:</b> ${esc(S.lastHint)}</p>` : ''}
@@ -925,9 +925,10 @@ function diffPicker(canPick, cur) {
 function choosePrologue() {
   const P = pick(PROLOGUES);
   return new Promise(res => {
-    const opt = c => `<button data-c="${c}"><span><b>${esc(P[c].t)}</b><br><small>${esc(P[c].d)}</small><br><small class="pfx">${esc(prologueFx(P[c].fx))}</small></span></button>`;
+    // only the choice itself is shown: what it leads to stays hidden until the night plays out
+    const opt = c => `<button data-c="${c}"><span><b>${esc(P[c].t)}</b></span></button>`;
     const m = openModal(`${storyPic('road')}<div class="eyebrow">${esc(SCN.text.road)}</div><h2>${esc(P.t)}</h2><p>${esc(P.s)}</p>
-      <div class="list">${opt('a')}${opt('b')}</div><p class="dim" style="margin-bottom:0">Decide together. It lasts for this scenario only.</p><div class="btns"><button class="ghost small" data-c="x">Back</button></div>`, 'story');
+      <div class="list">${opt('a')}${opt('b')}</div><p class="dim" style="margin-bottom:0">Decide together. Whatever it leads to lasts for this scenario only.</p><div class="btns"><button class="ghost small" data-c="x">Back</button></div>`, 'story');
     m.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; m.remove(); res(b.dataset.c === 'x' ? null : {id: P.id, c: b.dataset.c}); });
   });
 }
