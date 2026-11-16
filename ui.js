@@ -332,6 +332,12 @@ function zoomAt(px, py, f, base) {
   G.vb = {x: ux - (ux - b.x) * ff, y: uy - (uy - b.y) * ff, w: b.w * ff, h: b.h * ff};
   applyVB();
 }
+// the interface itself never zooms (pinch, double-tap, ctrl+wheel, ctrl +/-); only the map does, through its own pan/zoom
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), {passive: false}));
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, {passive: false});
+document.addEventListener('dblclick', e => e.preventDefault(), {passive: false});
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && ['+', '=', '-', '_', '0'].includes(e.key)) e.preventDefault(); });
+document.addEventListener('wheel', e => { if (e.ctrlKey && !e.target.closest('#board')) e.preventDefault(); }, {passive: false});
 document.addEventListener('wheel', e => { if (!e.target.closest('#board') || !G.vb) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.pow(1.0018, e.deltaY)); }, {passive: false});
 document.addEventListener('click', e => { if (dragged && e.target.closest('#board')) { e.stopPropagation(); e.preventDefault(); dragged = false; } }, true);
 
@@ -529,7 +535,7 @@ function renderSheet() {
     h += `<div class="sh-head"><svg width="44" height="44" viewBox="0 0 44 44">${tokenIcon('explore', 22, 22, 19)}</svg><div><h2>${t.link.stairs != null ? 'Stairs down' : 'A closed door'}</h2><div class="role">Explore · from ${esc(SP[t.from].n)}</div></div></div>
       <p class="flav">${t.link.stairs != null ? 'The stairs descend into cold, wet dark.' : jam ? `The door is swollen in its frame. You will have to force it (Strength, ${CONFIG.jamNeed} success${CONFIG.jamNeed > 1 ? 'es' : ''}).` : 'You don’t know what is on the other side.'}</p>`;
     if (t.link.lowOnly) h += `<p class="flav"><b>Low tide only:</b> you can go out this way only when the tide is Low, and come back at any tide but High.</p>`;
-    if (me) h += `<div class="acts">${me.space === t.from ? btn(jam ? 'Force the door (Strength)' : 'Explore', 'explore', {id}, hasAct, '1 action') : '<small>Stand in the space next to this door to explore.</small>'}</div>`;
+    if (me) h += `<div class="acts">${me.space === t.from ? btn(jam ? 'Force the door (Strength)' : 'Explore', 'explore', {id}, hasAct, '1 action · then enter or stay') : '<small>Stand in the space next to this door to explore.</small>'}</div>`;
   } else if (kind === 'stairs') {
     h += `<h2>Stairs</h2><p class="flav">${S.sc === 'saltmere' ? 'Stairs, a ladder or a path over the rocks. Moving along them counts as moving one space. The rocks below the Slipway can only be crossed at Low tide.' : 'They connect the Stairwell and the Boiler Room. Moving along them counts as moving one space.'}</p>`;
   }
@@ -559,10 +565,10 @@ function confirmBox(title, text) {
     m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (b) { m.remove(); res(b.dataset.x === 'yes'); } });
   });
 }
-function choose(title, opts, note = '') {
+function choose(title, opts, note = '', must = false) {
   return new Promise(res => {
-    const m = openModal(`<h2>${title}</h2>${note ? `<p class="dim">${note}</p>` : ''}<div class="list">${opts.map((o, i) => `<button data-i="${i}">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ''}</button>`).join('')}</div>
-      <div class="btns"><button class="ghost" data-x="cancel">Cancel</button></div>`);
+    const m = openModal(`<h2>${esc(title)}</h2>${note ? `<p class="dim">${esc(note)}</p>` : ''}<div class="list">${opts.map((o, i) => `<button data-i="${i}">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ''}</button>`).join('')}</div>
+      ${must ? '' : '<div class="btns"><button class="ghost" data-x="cancel">Cancel</button></div>'}`);
     m.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; m.remove(); res(b.dataset.i != null ? opts[+b.dataset.i].v : null); });
   });
 }
@@ -760,6 +766,7 @@ async function doAction(kind, arg) {
       toast,
       puzzle: (id, who) => runPuzzle(D, id, who),
       ask: (title, text) => confirmBox(title, text),
+      choose: (title, opts, note, must) => choose(title, opts, note, must),
       gate: async () => { if (gated) return passed; gated = true; if (NO_EVADE.includes(kind) || !monAt(D, inv.space).length) return true; passed = await evade(D, inv, ctx); return passed; },
     };
     const res = await ACT[kind](D, inv, arg, ctx);
@@ -975,7 +982,7 @@ function showRules() {
   info('How to play', `<div class="rules">
     <p>Greywater plays like Mansions of Madness. Work together — everyone wins or loses as one (unless madness gives you other plans).</p>
     <h3>A round</h3><p><b>Investigator phase:</b> in any order you like, each investigator takes a turn of <b>2 actions</b>. When everyone is done, press <b>End Phase</b>. <b>Mythos phase:</b> an event happens, monsters move and attack, then anyone in a room with a monster resolves a horror check.</p>
-    <h3>Actions</h3><p><b>Move</b> up to 2 spaces (tap Move, then a lit space; you can split it around another action). <b>Explore</b> a door token. <b>Search</b> a 🔍 token. <b>Interact</b> with a ❗ or person. <b>Attack</b> a monster (tap it). <b>Trade</b> with someone in your space. <b>Use</b> items from your card. Tap any token for details.</p>
+    <h3>Actions</h3><p><b>Move</b> up to 2 spaces (tap Move, then a lit space; you can split it around another action). <b>Explore</b> a door token: the room is revealed, then you choose to step inside (no extra action) or stay where you are. <b>Search</b> a 🔍 token. <b>Interact</b> with a ❗ or person. <b>Attack</b> a monster (tap it). <b>Trade</b> with someone in your space. <b>Use</b> items from your card. Tap any token for details.</p>
     <h3>Evading</h3><p>If a monster is in your space, you must pass an evade test before any action except Attack. Fail and the action is lost — and it hits you.</p>
     <h3>Tests</h3><p>Roll one die per point of skill: ✦ is a success, 🔍 can be turned into a success by spending a Clue (not in Darkness), blank is nothing.</p>
     <h3>Same rules for everyone</h3><p>Each action always tests the same skill against the same target, whoever attempts it — forcing the jammed door is Strength, need 1, for all. Only the number of dice differs, because it comes from that investigator's skill. The text describing the attempt changes with each character's background; it is flavour and never changes the result.</p>
