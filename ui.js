@@ -679,7 +679,7 @@ function showSummary(S) {
   const chip = (n, label) => n ? `<span class="stat">${label} <b>${n}</b></span>` : '';
   const rows = S.inv.map(v => {
     const d = INVD(v.id), x = st[v.id] || {};
-    const fate = v.out ? 'Lost' : v.insane && v.wounded ? 'Wounded · Insane' : v.insane ? 'Insane' : v.wounded ? 'Wounded' : won ? 'Unharmed' : 'Taken';
+    const fate = v.out ? (won ? 'Lost' : 'Fell') : v.insane && v.wounded ? 'Wounded · Insane' : v.insane ? 'Insane' : v.wounded ? 'Wounded' : won ? 'Unharmed' : 'Taken';
     return `<div class="sumrow"><div class="sh-head">${portraitSVG(v.id, 56)}<div><h3>${esc(d.name)}${titles[v.id] ? ` <small class="ttl">${titles[v.id]}</small>` : ''}</h3><div class="role">${esc(d.role)} · <b class="${v.out || !won ? 'w' : ''}">${fate}</b></div></div></div>
       <div class="stats">${chip(x.rooms, 'Rooms opened')}${chip(x.searches, 'Searches')}${chip(x.ev, 'Evidence')}${chip(x.kills, 'Monsters destroyed')}${chip(x.dealt, 'Damage dealt')}${chip(x.dmg, 'Damage taken')}${chip(x.hor, 'Horror taken')}${chip(x.rolls ? `${x.passes || 0}/${x.rolls}` : 0, 'Tests passed')}</div>
       <p class="epi">${esc(epilogueFor(S, v))}</p></div>`;
