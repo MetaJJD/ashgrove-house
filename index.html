@@ -147,6 +147,14 @@ b.w{color:#ff9c90}b.i{color:#b9c3ff}
 .die.B{opacity:.55}
 .modal.story{max-width:620px}.modal.story .btns{position:sticky;bottom:-22px;margin:10px -22px -22px;padding:12px 22px 22px;background:linear-gradient(180deg,rgba(21,16,13,0),#15100d 35%)}
 .spic{margin:-8px -8px 14px;border-radius:8px;overflow:hidden;aspect-ratio:2/1;background:#0a0708;box-shadow:inset 0 0 40px #000}.spic img,.spic svg{width:100%;height:100%;object-fit:cover;display:block}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid var(--line)}.setrow>span:first-child{flex:1}.setrow small{display:block;color:var(--dim,#a39680);font-size:13px;margin-top:2px}.setrow input[type=checkbox]{width:24px;height:24px;accent-color:#b8423a;flex:none}.seg{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.txt-s .modal,.txt-s .sheet,.txt-s .drawer,.txt-s .toast{zoom:.9}.txt-l .modal,.txt-l .sheet,.txt-l .drawer,.txt-l .toast,.txt-l .hud{zoom:1.14}.txt-xl .modal,.txt-xl .sheet,.txt-xl .drawer,.txt-xl .toast,.txt-xl .hud{zoom:1.28}
+.fast *{animation-duration:.12s!important;transition-duration:.08s!important}
+.ping{fill:none;stroke-width:6;pointer-events:none;animation:ping 1.2s ease-out forwards}@keyframes ping{from{r:18px;opacity:1}to{r:95px;opacity:0}}
+button.undo{border-color:#c9a04a;color:#f0d28a}
+.mine{background:rgba(184,66,58,.13);border:1px solid rgba(184,66,58,.45);border-radius:10px;padding:10px 14px;margin:10px 0}.mine.calm{background:rgba(120,160,130,.1);border-color:rgba(120,160,130,.35)}.mine p{margin:4px 0 0}
+.mlist{margin:6px 0 0;padding-left:20px}.mlist li{margin:3px 0}.mlist li.bad{color:#ff9a8f}.mlist li.good{color:#b9d6b0}.msec{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#a39680;margin:10px 0 2px}
+.goalbox .gt{font-size:19px;color:#f0d28a;margin:2px 0 4px}.goalbox p{margin:4px 0;font-size:15px;line-height:1.4}.goalbox .dl{color:#ff9a8f}.goalbox .hint{color:#b9d6b0}
 .dflav{font-style:italic;color:#cdbf9f;text-align:center;margin:4px 6px 10px;line-height:1.4}.dout{display:block;font-style:italic;color:#e6dcc2;margin-top:6px}
 .dsum{text-align:center;font-size:19px}
 .tf{display:inline-flex;gap:4px}.tf .f{font-style:normal;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:5px;background:#3a2e26;font-size:14px}.tf .S,.tf .X{background:#d3962f}.tf .C{background:#5c6cbd}
@@ -191,6 +199,6 @@ button.stop{min-height:40px;font-size:15px}
 <script src="flavor.js"></script>
 <script src="ui.js"></script>
 <script src="net.js"></script>
-<script>render(); initCaps();</script>
+<script>applySettings(); render(); initCaps();</script>
 </body>
 </html>

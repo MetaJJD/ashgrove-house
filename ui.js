@@ -13,7 +13,99 @@ const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel',
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
-  drawer: false, storyQ: [], showingStory: false, secretsShown: {}};
+  drawer: false, storyQ: [], showingStory: false, secretsShown: {}, undo: null, tour: null, camAnim: 0};
+
+// ------------------------------------------------------------ settings
+const SET_DEF = {text: 'm', fast: false, shake: true, follow: true, warnEnd: true, alert: true};
+const SET = Object.assign({}, SET_DEF, (() => { try { return JSON.parse(localStorage.getItem('gw-settings') || '{}'); } catch (e) { return {}; } })());
+function applySettings() {
+  const c = document.body.classList;
+  c.toggle('txt-s', SET.text === 's'); c.toggle('txt-l', SET.text === 'l'); c.toggle('txt-xl', SET.text === 'xl'); c.toggle('fast', !!SET.fast);
+  try { localStorage.setItem('gw-settings', JSON.stringify(SET)); } catch (e) {}
+}
+function showSettings() {
+  const row = (k, label, sub) => `<label class="setrow"><span>${label}<small>${sub}</small></span><input type="checkbox" data-set="${k}" ${SET[k] ? 'checked' : ''}></label>`;
+  const m = openModal(`<h2>Settings</h2>
+    <div class="setrow"><span>Text size<small>Pop-ups, cards and the journal</small></span><span class="seg">${[['s', 'Small'], ['m', 'Normal'], ['l', 'Large'], ['xl', 'Largest']].map(([v, n]) => `<button class="small ${SET.text === v ? 'primary' : ''}" data-text="${v}">${n}</button>`).join('')}</span></div>
+    ${row('follow', 'Camera follows the action', 'The board glides to whoever is acting, and to monsters that moved')}
+    ${row('warnEnd', 'Warn before ending a turn early', 'Asks first if you still have actions left')}
+    ${row('alert', 'Your-turn alert', 'A chime and a buzz when it is your turn (online games)')}
+    ${row('fast', 'Faster dice and pop-ups', 'Shorter dice rolls and animations')}
+    ${row('shake', 'Screen shake', 'The jolt when the Mythos phase begins')}
+    <div class="btns"><button class="primary" data-x="ok">Done</button></div>`, 'settings');
+  m.addEventListener('click', e => {
+    const t = e.target.closest('[data-text]');
+    if (t) { SET.text = t.dataset.text; applySettings(); m.querySelectorAll('[data-text]').forEach(b => b.classList.toggle('primary', b.dataset.text === SET.text)); }
+    if (e.target.closest('[data-x="ok"]')) m.remove();
+  });
+  m.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.set; if (k) { SET[k] = e.target.checked; applySettings(); } });
+}
+
+// ------------------------------------------------------------ camera
+const spCenter = sid => { const p = SP[sid]; return {x: (p.x + p.w / 2) * CELL, y: (p.y + p.h / 2) * CELL}; };
+function camTo(cx, cy, ms = 550) {
+  return new Promise(res => {
+    if (!G.vb) return res();
+    const id = ++G.camAnim, from = {...G.vb}, tx = cx - from.w / 2, ty = cy - from.h / 2, t0 = performance.now();
+    if (SET.fast) ms = Math.min(ms, 220);
+    const step = now => {
+      if (id !== G.camAnim || !G.vb) return res();
+      const k = Math.min(1, (now - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      G.vb.x = from.x + (tx - from.x) * e; G.vb.y = from.y + (ty - from.y) * e; applyVB();
+      if (k < 1) requestAnimationFrame(step); else res();
+    };
+    requestAnimationFrame(step);
+  });
+}
+// glide only when the space is outside the comfortable middle of the view
+function camFollow(sid) {
+  if (!SET.follow || !G.vb || !SP[sid] || PTR.size) return;
+  const c = spCenter(sid), mx = G.vb.w * 0.22, my = G.vb.h * 0.22;
+  if (c.x > G.vb.x + mx && c.x < G.vb.x + G.vb.w - mx && c.y > G.vb.y + my && c.y < G.vb.y + G.vb.h - my) return;
+  camTo(c.x, c.y);
+}
+function ping(sid, color = '#ff6a5f') {
+  const svg = $('#board svg'); if (!svg || !SP[sid]) return;
+  const c = spCenter(sid), el = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  el.setAttribute('cx', c.x); el.setAttribute('cy', c.y); el.setAttribute('r', 30); el.setAttribute('class', 'ping'); el.setAttribute('stroke', color);
+  svg.appendChild(el); setTimeout(() => el.remove(), 1300);
+}
+// after the Mythos report: visit each monster that moved or appeared
+async function runTour() {
+  const stops = G.tour; G.tour = null;
+  if (!stops || !stops.length || !SET.follow || !G.vb) return;
+  const home = {...G.vb}, id0 = G.camAnim;
+  let cancelled = false;
+  const stop = () => { cancelled = true; };
+  document.addEventListener('pointerdown', stop, {once: true, capture: true});
+  const wait = ms => new Promise(r => setTimeout(r, SET.fast ? ms / 2 : ms));
+  for (const sid of stops) {
+    if (cancelled || !G.S || G.S.phase !== 'play') break;
+    const c = spCenter(sid); await camTo(c.x, c.y, 500); if (cancelled) break;
+    ping(sid); await wait(750);
+  }
+  document.removeEventListener('pointerdown', stop, {capture: true});
+  if (!cancelled && G.vb && G.S) { const v = G.S.inv.find(i => !i.out && mineInv(i)); if (v) { const c = spCenter(v.space); await camTo(c.x, c.y, 500); } else await camTo(home.x + home.w / 2, home.y + home.h / 2, 500); }
+}
+
+// ------------------------------------------------------------ your-turn alert
+let audioCtx = null;
+function chime() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime;
+    [[523.25, 0], [783.99, 0.16]].forEach(([f, d]) => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.18, t + d + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.7); o.connect(g).connect(audioCtx.destination); o.start(t + d); o.stop(t + d + 0.75); });
+  } catch (e) {}
+}
+const myTurn = S => !!S && S.phase === 'play' && S.active < 0 && S.inv.some((v, i) => !v.out && !S.done[i] && mineInv(v));
+function turnAlert(prev, S) {
+  if (G.mode !== 'online' || !SET.alert || !prev || prev.gid !== S.gid) return;
+  if (!myTurn(S)) return;
+  const wasMine = prev.round === S.round && (myTurn(prev) || (prev.active >= 0 && mineInv(prev.inv[prev.active])));
+  if (wasMine) return;
+  chime(); try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch (e) {}
+  toast('Your turn — choose an investigator.');
+}
 
 // ------------------------------------------------------------ portraits
 function hatShapes(hat, cx, cy, r) {
@@ -235,6 +327,7 @@ function canAct() {
 }
 const pname = id => id === 'local' ? '' : id === G.me ? 'You' : ((G.S && G.S.names && G.S.names[id]) || (G.lobby && (G.lobby.seats || []).find(s => s.uid === id)?.name) || 'A player');
 function candles(n, max) { return Array.from({length: max}, (_, k) => `<span class="candle ${k < n ? 'on' : ''}"></span>`).join(''); }
+const undoBtn = S => G.undo && G.undo.rev === S.rev && !G.busy ? `<button class="small undo" data-act="undo" title="Take back the ${G.undo.what}">↶ Undo</button>` : '';
 function hudHTML(S) {
   const chips = S.inv.map((v, i) => {
     const d = INVD(v.id);
@@ -253,21 +346,34 @@ function hudHTML(S) {
     if (S.active >= 0) {
       const v = S.inv[S.active];
       if (mineInv(v)) ctrl = `<div class="turnbox"><div><b>${esc(INVD(v.id).name)}</b> <span class="cands">${candles(S.actions, CONFIG.actions)}</span>${S.moveLeft ? `<small> · ${S.moveLeft} move left</small>` : ''}</div>
-        <div class="row"><button class="small" data-act="movemode">${G.moveMode ? 'Cancel move' : 'Move'}</button><button class="small" data-act="tok" data-kind="inv" data-id="${v.id}">Items & card</button><button class="small ghost" data-act="endturn">End turn</button></div></div>`;
+        <div class="row"><button class="small" data-act="movemode">${G.moveMode ? 'Cancel move' : 'Move'}</button><button class="small" data-act="tok" data-kind="inv" data-id="${v.id}">Items & card</button>${undoBtn(S)}<button class="small ghost" data-act="endturn">End turn</button></div></div>`;
       else ctrl = `<div class="turnbox"><small>Waiting for ${esc(pname(v.owner))} — ${esc(INVD(v.id).name)}</small>${G.net && G.net.role === 'host' ? `<button class="small ghost" data-act="takeover" data-i="${S.active}">Take over this seat</button>` : ''}</div>`;
-    } else if (allDone(S)) ctrl = `<div class="turnbox"><button class="primary" data-act="endphase" ${G.busy ? 'disabled' : ''}>End Phase → Mythos</button></div>`;
-    else ctrl = `<div class="turnbox"><small>Choose who goes next — any order.</small></div>`;
+    } else if (allDone(S)) ctrl = `<div class="turnbox">${undoBtn(S)}<button class="primary" data-act="endphase" ${G.busy ? 'disabled' : ''}>End Phase → Mythos</button></div>`;
+    else ctrl = `<div class="turnbox"><small>Choose who goes next — any order.</small>${undoBtn(S)}</div>`;
   }
   return `<div class="chips">${chips}</div>${ctrl}`;
 }
 function topHTML(S) {
   return `<h1>Greywater</h1><span class="pill">Round ${S.round}</span><span class="pill goal">${esc(goalText(S))}</span>
     <span class="sp"></span><span class="net" id="net">${esc(G.netText || '')}</span>
-    <button class="small ghost" data-act="fit" title="Fit map">⤢</button><button class="small ghost" data-act="drawer">Journal</button><button class="small ghost" data-act="rules">Rules</button><button class="small ghost" data-act="home">Menu</button>`;
+    <button class="small ghost" data-act="fit" title="Fit map">⤢</button><button class="small ghost" data-act="drawer">Journal</button><button class="small ghost" data-act="rules">Rules</button><button class="small ghost" data-act="settings" title="Settings">⚙</button><button class="small ghost" data-act="home">Menu</button>`;
+}
+function goalHelp(S) {
+  if (!S.goal) return `Explore the house and find ${CONFIG.evidenceNeeded} pieces of evidence about what Dr. Marrow did here. Evidence hides behind Search (🔍) and Interact (!) tokens.`;
+  if (S.goal === 'A') {
+    const holder = S.inv.find(v => !v.out && v.items.includes('valve'));
+    return holder ? `${INVD(holder.id).name} has the Valve Wheel. Bring it to the Engine in Hydrotherapy and Interact to turn the valves (pipe puzzle, Strength).` : 'Find the Valve Wheel (search the Boiler Room), carry it to the Engine in Hydrotherapy, then Interact to turn the valves (pipe puzzle, Strength). Dr. Marrow guards it.';
+  }
+  if (S.ada && S.ada.escort) return `Ada is following ${INVD(S.ada.escort).name}. Lead her to the front doors in the Receiving Hall and Interact there.`;
+  if (S.ada && S.ada.found) return `Ada Wren is in the ${ROOMS[roomOf(S.ada.space)].n}. Go to her and Interact to calm her (Influence), then lead her to the front doors.`;
+  return 'Ada Wren is somewhere in the building. Explore to find her, calm her (Interact, Influence), then lead her out through the front doors in the Receiving Hall.';
 }
 function drawerHTML(S) {
   return `<div class="dh"><h3>Journal</h3><button class="small ghost" data-act="drawer">Close</button></div>
-    <div class="ev"><div class="eyebrow">Evidence</div>${S.evidence.length ? S.evidence.map(e => `<div>• ${esc(e)}</div>`).join('') : '<small>None yet.</small>'}</div>
+    <div class="ev goalbox"><div class="eyebrow">Your goal</div><div class="gt">${esc(goalText(S))}</div><p>${esc(goalHelp(S))}</p>
+      ${S.lastRound && S.phase === 'play' ? `<p class="dl">One of you has fallen. You have until the end of round ${S.lastRound}.</p>` : ''}
+      ${(() => { const h = !S.goal && S.log.find(e => e.t.startsWith('The hymn falters')); return h ? `<p class="hint"><b>Latest lead:</b> ${esc(h.t.replace(/^The hymn falters for a moment, and in the silence you are sure of it: /, '').replace(/^s/, 'S'))}</p>` : ''; })()}</div>
+    <div class="ev"><div class="eyebrow">Evidence ${S.evidence.length}/${CONFIG.evidenceNeeded}</div>${S.evidence.length ? S.evidence.map(e => `<div>• ${esc(e)}</div>`).join('') : '<small>None yet. Search and Interact tokens may hold it.</small>'}</div>
     <div class="log">${S.log.map(e => `<div class="${e.k || ''}">${esc(e.t)}</div>`).join('')}</div>`;
 }
 function renderGame() {
@@ -454,7 +560,7 @@ function rollTest(D, inv, sk, o = {}) {
       const canSpend = !keen && !dark && faces.includes('C') && left > 0;
       $('#dctrl', m).innerHTML = `${canSpend ? `<button data-x="spend">Spend a Clue: 🔍 → ✦ <small>(${left} left)</small></button>` : ''}<button class="primary" data-x="ok">Continue</button>`;
     };
-    setTimeout(() => { clearInterval(iv); drawD(); }, 650);
+    setTimeout(() => { clearInterval(iv); drawD(); }, SET.fast ? 180 : 650);
     m.addEventListener('click', e => {
       const b = e.target.closest('[data-x]'); if (!b) return;
       if (b.dataset.x === 'spend') { const i = faces.indexOf('C'); if (i >= 0 && inv.clues - spent > 0) { faces[i] = 'X'; spent++; drawD(); } }
@@ -498,17 +604,35 @@ function storyPic(img) {
   else if (motif === 'dark') m = `<circle cx="240" cy="130" r="46" fill="#d8dcff" opacity=".22"/><circle cx="262" cy="118" r="44" fill="${c}"/>`;
   return `<div class="spic"><svg viewBox="0 0 480 270" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="sp-${img}" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="${c}"/><stop offset="1" stop-color="#07050a"/></radialGradient></defs><rect width="480" height="270" fill="url(#sp-${img})"/>${m}</svg></div>`;
 }
+// Mythos report: what happened to your own investigators comes first, everything else below
+function mythosBody(text) {
+  const S = G.S, i = text.indexOf('\n\n');
+  const flavor = i < 0 ? text : text.slice(0, i), lines = i < 0 ? [] : text.slice(i + 2).split('\n').filter(Boolean);
+  const names = S ? S.inv.filter(v => mineInv(v)).map(v => INVD(v.id).name) : [];
+  const cls = t => /suffers|is lost|Wounded|Insane|drops/.test(t) ? 'bad' : /no harm|holds|shuts it out|keeps|grits|discards|learns|\+1 Clue/.test(t) ? 'good' : '';
+  const li = t => `<li class="${cls(t)}">${esc(t.replace(/^• /, ''))}</li>`;
+  const mine = lines.filter(t => t.startsWith('• ') && names.some(n => t.includes(n)));
+  const rest = lines.filter(t => !mine.includes(t));
+  // drop section headings that have nothing left under them
+  const kept = rest.filter((t, k) => t.startsWith('• ') || (rest[k + 1] && rest[k + 1].startsWith('• ')));
+  let restHTML = '', open = false;
+  for (const t of kept) { if (t.startsWith('• ')) { if (!open) { restHTML += '<ul class="mlist">'; open = true; } restHTML += li(t); } else { if (open) { restHTML += '</ul>'; open = false; } restHTML += `<div class="msec">${esc(t.replace(/—/g, '').trim())}</div>`; } }
+  if (open) restHTML += '</ul>';
+  const who = G.mode === 'online' ? 'What happened to you' : 'What happened to your investigators';
+  return `<p>${esc(flavor)}</p>${mine.length ? `<div class="mine"><div class="eyebrow">${who}</div><ul class="mlist">${mine.map(li).join('')}</ul></div>` : (names.length ? `<div class="mine calm"><div class="eyebrow">${who}</div><p>Nothing touched ${G.mode === 'online' ? 'you' : 'them'} this time.</p></div>` : '')}${restHTML ? `<div class="eyebrow" style="margin-top:12px">Around the house</div>${restHTML}` : ''}`;
+}
 async function pumpStories() {
   if (G.showingStory) return;
   G.showingStory = true;
   while (G.storyQ.length) {
     const s = G.storyQ.shift();
-    if (s.kind === 'mythos') { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500); }
+    if (s.kind === 'mythos' && SET.shake) { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500); }
     const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: 'Chapter 1', insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
-    await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
+    await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${s.kind === 'mythos' ? mythosBody(s.text) : para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
     if ((s.kind === 'won' || s.kind === 'lost') && G.S) await showInsanityResults(G.S);
   }
   G.showingStory = false;
+  if (G.afterStories) { const f = G.afterStories; G.afterStories = null; f(); }
 }
 
 // trade
@@ -546,6 +670,7 @@ async function doAction(kind, arg) {
     const D = clone(S);
     const inv = D.active >= 0 ? D.inv[D.active] : null;
     if (needsAction(D, kind)) { toast('No actions left this turn.'); return; }
+    const mark = JSON.stringify([D.rseq || 0, D.storySeq, D.decks, D.monsters, D.fire, D.puzzles, D.inv.map(v => [v.dmg, v.hor, v.items, v.clues]), D.tokens.length, D.threat, D.noise]);
     let gated = false, passed = true;
     const ctx = {
       test: (sk, o) => rollTest(D, inv, sk, o),
@@ -560,11 +685,28 @@ async function doAction(kind, arg) {
     afterAction(D, kind);
     G.busy = false; committed = true;
     if (kind === 'start') G.moveMode = false;
+    // Undo is offered only when nothing was rolled, drawn, revealed or changed apart from where people stand
+    const same = mark === JSON.stringify([D.rseq || 0, D.storySeq, D.decks, D.monsters, D.fire, D.puzzles, D.inv.map(v => [v.dmg, v.hor, v.items, v.clues]), D.tokens.length, D.threat, D.noise]);
+    const undoable = ['move', 'start', 'endturn'].includes(kind) && same && D.phase === 'play';
+    const what = kind === 'move' ? 'move' : kind === 'start' ? 'turn start' : 'end of turn';
     await commit(D);
+    G.undo = undoable && G.S && G.S.gid === S.gid ? {prev: S, rev: G.S.rev, what} : null;
+    if (G.undo) render();
+    if (inv && kind === 'move') camFollow(D.inv[D.active >= 0 ? D.active : S.active].space);
+    if (kind === 'start' && D.active >= 0) camFollow(D.inv[D.active].space);
   } catch (e) { console.error(e); toast('Something went wrong: ' + (e && e.message || e)); }
   finally { G.busy = false; if (!committed) render(); }
 }
 
+async function undoLast() {
+  const u = G.undo, S = G.S;
+  if (!u || !S || G.busy || S.rev !== u.rev || S.phase !== 'play') { G.undo = null; render(); return; }
+  G.undo = null; G.moveMode = false; closeSheet();
+  const D = clone(u.prev);
+  log(D, `(Took back the ${u.what}.)`);
+  await commit(D);
+  toast(`Took back the ${u.what}.`, 2200);
+}
 async function commit(D) {
   D.rev = (G.S && G.S.rev || 0) + 1;
   if (G.mode === 'local') { saveLocal(D); onState(D); return; }
@@ -576,13 +718,22 @@ async function commit(D) {
 function onState(S, force) {
   if (!force && G.S && S.gid === G.S.gid && S.rev < G.S.rev) return;
   if (G.S && G.S.gid !== S.gid) { G.seenStory = null; G.vb = null; }
+  const prev = G.S && G.S.gid === S.gid ? G.S : null;
+  if (G.undo && S.rev !== G.undo.rev) G.undo = null;
+  if (prev && S.round > prev.round && S.phase === 'play') {
+    const was = {}; prev.monsters.forEach(m => was[m.mid] = m.space);
+    G.tour = [...new Set(S.monsters.filter(m => was[m.mid] !== m.space).map(m => m.space))].slice(0, 6);
+  }
   G.S = S; G.screen = 'game';
   if (G.seenR == null) G.seenR = S.rseq;
   render();
   if (S.rseq > G.seenR) { G.seenR = S.rseq; if (S.roll && !G.myRolls.has(S.roll.seq) && G.mode === 'online') rollToast(S.roll); }
   if (S.flip && G.seenFlip !== S.flip.seq) { if (G.seenFlip != null && G.mode === 'online' && !mineInv(S.inv.find(i => i.id === S.flip.who) || {})) toast(`${INVD(S.flip.who).name} cast ${SPELLS[S.flip.spell].n}: “${SPELLS[S.flip.spell].backs[S.flip.back].t}”`, 6000); G.seenFlip = S.flip.seq; }
   if (G.seenFlip === undefined) G.seenFlip = S.flip ? S.flip.seq : null;
+  // other players' turns: follow whoever is acting
+  if (prev && G.mode === 'online' && S.active >= 0 && !mineInv(S.inv[S.active]) && (prev.active !== S.active || prev.inv[S.active].space !== S.inv[S.active].space)) camFollow(S.inv[S.active].space);
   queueStories(S);
+  if (!G.showingStory) { turnAlert(prev, S); if (G.tour) runTour(); } else G.afterStories = () => { turnAlert(prev, S); if (G.tour) runTour(); };
   checkSecrets(S);
 }
 function saveLocal(S) { try { localStorage.setItem('gw-local', JSON.stringify(S)); } catch (e) {} }
@@ -663,7 +814,7 @@ function renderHome() {
     <div class="card"><h2>Play on this device</h2>
       <p class="dim" style="margin-top:0">Pass the device around, or play solo with two investigators.</p>
       <div class="row"><button data-act="setup">New game</button>${local && local.phase === 'play' && local.v === 2 ? `<button data-act="resume">Resume (round ${local.round})</button>` : ''}</div></div>
-    <div class="card"><div class="row"><button class="ghost" data-act="rules">How to play</button><button class="ghost" data-act="install">Install as an app</button></div></div>
+    <div class="card"><div class="row"><button class="ghost" data-act="rules">How to play</button><button class="ghost" data-act="install">Install as an app</button><button class="ghost" data-act="settings">Settings</button></div></div>
   </div>`;
   $('#code').value = codeVal; $('#pname').value = nameVal;
 }
@@ -731,7 +882,16 @@ document.addEventListener('click', async e => {
     case 'closesheet': closeSheet(); break;
     case 'movemode': G.moveMode = !G.moveMode; closeSheet(); render(); break;
     case 'start': closeSheet(); doAction('start', +b.dataset.i); break;
-    case 'endturn': closeSheet(); doAction('endturn'); break;
+    case 'endturn': {
+      closeSheet();
+      if (SET.warnEnd && S && S.active >= 0 && S.actions > 0 && canAct()) {
+        const n = S.actions;
+        if (!(await confirmBox('End the turn?', `${INVD(S.inv[S.active].id).name} still has ${n} action${n > 1 ? 's' : ''} left.`))) break;
+      }
+      doAction('endturn'); break;
+    }
+    case 'undo': undoLast(); break;
+    case 'settings': showSettings(); break;
     case 'endphase': closeSheet(); doAction('endphase'); break;
     case 'space': {
       if (!S) break;
