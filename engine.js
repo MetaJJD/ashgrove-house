@@ -10,9 +10,10 @@ const CONFIG = {
   clueStart: 1,
   evidenceNeeded: 3,
   threatMax: 14,         // hidden clock: lose when it reaches this (overridden per player count below)
-  threatByPlayers: {2: 24, 3: 17, 4: 15},  // tuned by simulation for ~35–42% wins
+  threatByPlayers: {2: 29, 3: 19, 4: 18},  // tuned by simulation for ~45–50% wins
   evLive: 4,             // how many of the 5 evidence sources hold evidence this game
   jamNeed: 1,            // successes to force the jammed stairwell door
+  graceRounds: 1,          // extra rounds the survivors get after the first investigator falls
   fireSpread: 0.4,         // chance fire spreads each Mythos phase
   fireCap: 3,              // most spaces that can burn at once (0 = no limit)
   lateBurst: true,         // boiler bursts even if unexplored: the fire is waiting when you open the Boiler Room
@@ -21,7 +22,7 @@ const CONFIG = {
   beatFrac: [0.27, 0.53, 0.8], // story escalations, as fractions of the hidden clock (4/8/12 on a 15-clock)
   engineNeed: 5,         // goal A: Strength successes to silence the Engine
   maxMonsters: 7,
-  maxByPlayers: {2: 2, 3: 3, 4: 5},  // monsters on the board at once (the boss never counts)
+  maxByPlayers: {2: 2, 3: 3, 4: 4},  // monsters on the board at once (the boss never counts)
 };
 
 // ------------------------------------------------------------- dice
@@ -332,8 +333,9 @@ function eliminate(S, inv, why, L) {
   if (S.ada && S.ada.escort === inv.id) S.ada.escort = null;
   say(S, L, `${nm(inv)} is lost to ${why}. Their belongings lie where they fell.`, 'dire');
   if (!S.lastRound) {
-    S.lastRound = S.step === 'inv' ? S.round : S.round + 1;
-    story(S, 'One of you has fallen', `${nm(inv)} is gone. The rest of you have until the end of ${S.step === 'inv' ? 'this' : 'the next'} investigator phase to finish this — or Greywater keeps you all.`, 'dire');
+    S.lastRound = (S.step === 'inv' ? S.round : S.round + 1) + (CONFIG.graceRounds || 0);
+    const left = S.lastRound - S.round + (S.step === 'inv' ? 1 : 0);
+    story(S, 'One of you has fallen', `${nm(inv)} is gone. The rest of you have until the end of ${left <= 1 ? 'this investigator phase' : `round ${S.lastRound}`} to finish this — or Greywater keeps you all.`, 'dire');
   }
   if (!activeInv(S).length) end(S, 'lost', 'Every investigator has fallen. In the Day Room, five new chairs have been turned to face the lake.');
 }
