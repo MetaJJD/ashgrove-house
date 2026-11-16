@@ -99,10 +99,26 @@ function boardSVG(S) {
       if (S.dark[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#000" opacity="${lit(S, sid) ? 0.2 : 0.62}"/><g opacity="0.85"><circle cx="${sx + sw - 20}" cy="${sy + 20}" r="9" fill="#cfd6ff"/><circle cx="${sx + sw - 16}" cy="${sy + 17}" r="8" fill="#14121a"/></g>`;
       overlays += `<rect class="${cls}" data-act="space" data-sp="${sid}" x="${sx + 3}" y="${sy + 3}" width="${sw - 6}" height="${sh - 6}" rx="3"/>`;
     }
-    rooms += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#120c08" stroke-width="10"/>`;
+    rooms += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#120c08" stroke-width="14"/>`;
     const tw = Math.min(w - 20, R.n.length * 10.5 + 26);
     rooms += `<g class="tag"><rect x="${x + 30}" y="${y + h - 36}" width="${tw}" height="26" rx="3" fill="#e8dcc0" stroke="#3a2a1a" stroke-width="2"/><text x="${x + 43}" y="${y + h - 18}">${esc(R.n)}</text></g></g>`;
   }
+  // walls: thick light lines on room edges you cannot pass, with gaps where the doors are
+  let walls = '';
+  const doorOn = (c1, c2) => DOORS.some(d => (d.a[0] === c1[0] && d.a[1] === c1[1] && d.b[0] === c2[0] && d.b[1] === c2[1]) || (d.b[0] === c1[0] && d.b[1] === c1[1] && d.a[0] === c2[0] && d.a[1] === c2[1]));
+  const seg = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  for (const [rid, R] of Object.entries(ROOMS)) {
+    if (!S.rooms[rid].rev) continue;
+    const edges = [];
+    for (let i = 0; i < R.w; i++) { const cx = R.x + i; edges.push([[cx, R.y], [cx, R.y - 1], 'h', cx, R.y], [[cx, R.y + R.h - 1], [cx, R.y + R.h], 'h', cx, R.y + R.h]); }
+    for (let j = 0; j < R.h; j++) { const cy = R.y + j; edges.push([[R.x, cy], [R.x - 1, cy], 'v', R.x, cy], [[R.x + R.w - 1, cy], [R.x + R.w, cy], 'v', R.x + R.w, cy]); }
+    for (const [c1, c2, dir, ex, ey] of edges) {
+      const X = ex * CELL, Y = ey * CELL, gap = 40;
+      if (dir === 'h') walls += doorOn(c1, c2) ? seg(X, Y, X + CELL / 2 - gap, Y) + seg(X + CELL / 2 + gap, Y, X + CELL, Y) : seg(X, Y, X + CELL, Y);
+      else walls += doorOn(c1, c2) ? seg(X, Y, X, Y + CELL / 2 - gap) + seg(X, Y + CELL / 2 + gap, X, Y + CELL) : seg(X, Y, X, Y + CELL);
+    }
+  }
+  rooms += `<g class="walls" stroke="#f3ede0" stroke-width="7" stroke-linecap="square">${walls}</g>`;
   // doors
   for (const d of DOORS) {
     const ra = S.rooms[roomOf(d.sa)].rev, rb = S.rooms[roomOf(d.sb)].rev;
