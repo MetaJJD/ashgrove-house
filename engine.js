@@ -18,7 +18,7 @@ const CONFIG = {
   lateBurst: true,         // boiler bursts even if unexplored: the fire is waiting when you open the Boiler Room
   noiseSummon: 'once',     // noise with no Orderly on the board calls one out of the walls: false | 'once' (per game) | true
   lampDropAt: 3,         // damage in one hit that makes a held Oil Lamp drop and start a fire
-  beats: [4, 8, 12],     // story escalations
+  beatFrac: [0.27, 0.53, 0.8], // story escalations, as fractions of the hidden clock (4/8/12 on a 15-clock)
   engineNeed: 5,         // goal A: Strength successes to silence the Engine
   maxMonsters: 7,
   maxByPlayers: {2: 2, 3: 3, 4: 5},  // monsters on the board at once (the boss never counts)
@@ -218,7 +218,7 @@ function newGame(picks) {
   const rooms = {};
   Object.keys(ROOMS).forEach(r => rooms[r] = {rev: false});
   const S = {
-    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax, maxMon: CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters,
+    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax, beatAt: CONFIG.beatFrac.map(f => Math.round(f * (CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax))), maxMon: CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters,
     threat: 0, active: -1, actions: 0, moveLeft: 0, done: picks.map(() => false),
     inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart, dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
     puzzles: makePuzzles(), fire: {}, flood: {}, ext: 0, flip: null,
@@ -499,16 +499,16 @@ const MYTHOS = [
   {id: 'quiet', t: 'Nothing', f: 'Nothing happens. Somehow that is worse.', fx: (S, L) => {}},
   {id: 'hymn', t: 'The hymn rises', min: 6, f: 'Voices rise from below, in perfect and terrible harmony.', fx: (S, L) => say(S, L, spawn(S, 'choir'), 'bad')},
 ];
-const BEATS = {
-  4: {t: 'The building settles', f: 'Doors that were locked an hour ago now stand open. Something is walking the halls on purpose.', fx: (S, L) => say(S, L, spawn(S, 'orderly'), 'bad')},
-  8: {t: 'The water begins to sing', f: 'Beneath your feet, the lake under Greywater has found its voice. The lights go out across the building.', fx: (S, L) => {
+const BEATS = [
+  {t: 'The building settles', f: 'Doors that were locked an hour ago now stand open. Something is walking the halls on purpose.', fx: (S, L) => say(S, L, spawn(S, 'orderly'), 'bad')},
+  {t: 'The water begins to sing', f: 'Beneath your feet, the lake under Greywater has found its voice. The lights go out across the building.', fx: (S, L) => {
     say(S, L, spawn(S, 'choir'), 'bad');
     shuffle(Object.keys(SP).filter(s => revealed(S, s) && !S.dark[s])).slice(0, 3).forEach(s => S.dark[s] = true);
     if (S.rooms.boiler.rev) { say(S, L, 'The boiler bursts.', 'bad'); setFire(S, 'B1', L); }
     else if (CONFIG.lateBurst) { S.boilerBurst = true; say(S, L, 'Far below, something bursts with a deep metallic boom.', 'bad'); }
   }},
-  12: {t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
-};
+  {t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
+];
 
 // Act I safety net: from the second story beat on, if the Reveal hasn't happened, the house points at one piece of evidence still waiting
 function evidenceHint(S, L) {
@@ -520,6 +520,7 @@ function evidenceHint(S, L) {
   say(S, L, `The hymn falters for a moment, and in the silence you are sure of it: something that matters is waiting in the ${ROOMS[rid].n}.`, 'good');
 }
 
+const beatsOf = S => S.beatAt || [4, 8, 12];
 function mythosPhase(S) {
   const L = [];
   S.step = 'mythos';
@@ -528,11 +529,12 @@ function mythosPhase(S) {
     S.step = 'inv'; return;
   }
   S.threat++;
-  const beat = BEATS[S.threat];
+  const bi = beatsOf(S).indexOf(S.threat), beat = BEATS[bi];
   let title, flavor;
-  if (beat) { title = beat.t; flavor = beat.f; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && S.threat > CONFIG.beats[0]) evidenceHint(S, L); }
+  if (beat) { title = beat.t; flavor = beat.f; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && bi > 0) evidenceHint(S, L); }
   else {
-    const opts = MYTHOS.filter(m => (!m.min || S.threat >= m.min) && !S.mythosUsed.slice(-4).includes(m.id));
+    const scale = (S.threatMax || 15) / 15;
+    const opts = MYTHOS.filter(m => (!m.min || S.threat >= Math.round(m.min * scale)) && !S.mythosUsed.slice(-4).includes(m.id));
     const ev = pick(opts);
     S.mythosUsed.push(ev.id);
     title = ev.t; flavor = ev.f; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); ev.fx(S, L);
