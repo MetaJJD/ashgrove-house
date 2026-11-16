@@ -415,7 +415,7 @@ function toast(t, ms = 3800) {
 }
 function rollToast(r) {
   const el = document.createElement('div'); el.className = 'toast';
-  el.innerHTML = `<b>${esc(INVD(r.who).name)}</b> · ${esc(r.label)}<br><span class="tf">${r.faces.map(f => `<i class="f ${f}">${FACE[f] || '·'}</i>`).join('')}</span> <small>${r.succ} success${r.succ === 1 ? '' : 'es'}</small>`;
+  el.innerHTML = `<b>${esc(INVD(r.who).name)}</b> · ${esc(r.label)}<br><span class="tf">${r.faces.map(f => `<i class="f ${f}">${FACE[f] || '·'}</i>`).join('')}</span> <small>${r.succ} success${r.succ === 1 ? '' : 'es'}</small>${r.flav ? `<br><i>${esc(r.flav)}</i>` : ''}`;
   $('#toasts').appendChild(el); setTimeout(() => el.remove(), 4500);
 }
 
@@ -430,20 +430,24 @@ function rollTest(D, inv, sk, o = {}) {
   return new Promise(resolve => {
     let spent = 0;
     const d = INVD(inv.id);
+    const flav = flavorTry(inv.id, sk, o.label || '');
+    let after = null;
     const m = openModal(`<div class="eyebrow">${esc(d.name)} · ${SKILL_NAMES[sk]} ${n} ${n === 1 ? 'die' : 'dice'}${o.need ? ` · need ${o.need}` : ''}</div><h2>${esc(o.label || SKILL_NAMES[sk])}</h2>
-      <div class="dice" id="dice"></div><div class="dsum" id="dsum">&nbsp;</div><div class="btns" id="dctrl" style="justify-content:center"></div>`, 'dicem');
+      <p class="dflav">${esc(flav)}</p><div class="dice" id="dice"></div><div class="dsum" id="dsum">&nbsp;</div><div class="btns" id="dctrl" style="justify-content:center"></div>`, 'dicem');
     const diceEl = $('#dice', m);
     diceEl.innerHTML = faces.map(() => `<div class="die rolling"></div>`).join('');
     const glyphs = ['✦', '🔍', '', ''];
     const iv = setInterval(() => diceEl.querySelectorAll('.die').forEach(e => e.textContent = pick(glyphs)), 70);
     const succ = () => faces.filter(f => f === 'S' || f === 'X' || (f === 'C' && keen)).length;
+    // the outcome line follows pass/fail, and changes if a spent Clue turns a failure into a success
+    const afterLine = () => { const ok = o.need ? succ() >= o.need : succ() > 0; if (!after || after.ok !== ok) after = {ok, t: flavorAfter(inv.id, sk, ok)}; return after.t; };
     const drawD = () => {
       diceEl.innerHTML = faces.map(f => `<div class="die ${f}${f === 'C' && keen ? ' K' : ''}">${FACE[f]}</div>`).join('');
       const s = succ(), notes = [];
       if (rerolled) notes.push('Erudite: blanks rerolled once.');
       if (keen) notes.push('Keen Eye: 🔍 counts as a success.');
       if (dark && faces.includes('C') && !keen) notes.push('Darkness: you cannot spend Clues here.');
-      $('#dsum', m).innerHTML = `${s} success${s === 1 ? '' : 'es'}${o.need ? (s >= o.need ? ' — <span class="pass">passed</span>' : ' — <span class="fail">failed</span>') : ''}${notes.length ? `<br><small>${notes.join(' ')}</small>` : ''}`;
+      $('#dsum', m).innerHTML = `${s} success${s === 1 ? '' : 'es'}${o.need ? (s >= o.need ? ' — <span class="pass">passed</span>' : ' — <span class="fail">failed</span>') : ''}${notes.length ? `<br><small>${notes.join(' ')}</small>` : ''}<span class="dout">${esc(afterLine())}</span>`;
       const left = inv.clues - spent;
       const canSpend = !keen && !dark && faces.includes('C') && left > 0;
       $('#dctrl', m).innerHTML = `${canSpend ? `<button data-x="spend">Spend a Clue: 🔍 → ✦ <small>(${left} left)</small></button>` : ''}<button class="primary" data-x="ok">Continue</button>`;
@@ -457,7 +461,7 @@ function rollTest(D, inv, sk, o = {}) {
         inv.clues -= spent;
         const s = succ();
         D.rseq = (D.rseq || 0) + 1;
-        D.roll = {seq: D.rseq, who: inv.id, label: o.label || SKILL_NAMES[sk], faces: faces.slice(), succ: s};
+        D.roll = {seq: D.rseq, who: inv.id, label: o.label || SKILL_NAMES[sk], faces: faces.slice(), succ: s, flav: after ? after.t : ''};
         G.myRolls.add(D.rseq);
         if (o.noisy && s < (o.need || 1)) D.noise = inv.id;
         resolve(s);
