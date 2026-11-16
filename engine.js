@@ -233,7 +233,7 @@ function newGame(picks) {
   return S;
 }
 function log(S, t, k = '') { S.log.unshift({r: S.round, t, k}); if (S.log.length > 120) S.log.length = 120; }
-function story(S, title, text, kind = 'story') { S.storySeq++; S.stories.push({seq: S.storySeq, title, text, kind}); if (S.stories.length > 12) S.stories.shift(); }
+function story(S, title, text, kind = 'story', img = null) { S.storySeq++; S.stories.push({seq: S.storySeq, title, text, kind, img}); if (S.stories.length > 12) S.stories.shift(); }
 function say(S, L, t, k) { log(S, t, k); if (L) L.push({t, k}); }
 
 const nm = inv => INVD(inv.id).name;
@@ -358,7 +358,7 @@ function revealRoom(S, rid, by) {
   if (rid === 'boiler' && S.boilerBurst) { S.boilerBurst = false; S.fire = S.fire || {}; S.fire.B1 = true; L.push('The boiler has burst. Fire has taken hold around it.'); }
   if (S.pendingBoss && roomOf(S.pendingBoss) === rid) { L.push(spawn(S, 'marrow', S.pendingBoss)); S.pendingBoss = null; }
   if (S.ada && !S.ada.found && roomOf(S.ada.space) === rid) { S.ada.found = true; L.push('Someone is here: a young woman in a patient’s gown, humming under her breath. Ada Wren.'); }
-  if (by) story(S, R.n, R.d + (L.length ? '\n\n' + L.join('\n') : '') + (R.dark ? '\n\nIt is dark here. You cannot spend Clues in Darkness without a light.' : ''), 'room');
+  if (by) story(S, R.n, R.d + (L.length ? '\n\n' + L.join('\n') : '') + (R.dark ? '\n\nIt is dark here. You cannot spend Clues in Darkness without a light.' : ''), 'room', 'room:' + rid);
 }
 function exploreTargets(S) {
   // unexplored doorways: [{key, from (revealed space), room (hidden), door|stairs}]
@@ -502,14 +502,14 @@ const MYTHOS = [
   {id: 'hymn', t: 'The hymn rises', min: 6, f: 'Voices rise from below, in perfect and terrible harmony.', fx: (S, L) => say(S, L, spawn(S, 'choir'), 'bad')},
 ];
 const BEATS = [
-  {t: 'The building settles', f: 'Doors that were locked an hour ago now stand open. Something is walking the halls on purpose.', fx: (S, L) => say(S, L, spawn(S, 'orderly'), 'bad')},
-  {t: 'The water begins to sing', f: 'Beneath your feet, the lake under Greywater has found its voice. The lights go out across the building.', fx: (S, L) => {
+  {id: 'settles', t: 'The building settles', f: 'Doors that were locked an hour ago now stand open. Something is walking the halls on purpose.', fx: (S, L) => say(S, L, spawn(S, 'orderly'), 'bad')},
+  {id: 'sing', t: 'The water begins to sing', f: 'Beneath your feet, the lake under Greywater has found its voice. The lights go out across the building.', fx: (S, L) => {
     say(S, L, spawn(S, 'choir'), 'bad');
     shuffle(Object.keys(SP).filter(s => revealed(S, s) && !S.dark[s])).slice(0, 3).forEach(s => S.dark[s] = true);
     if (S.rooms.boiler.rev) { say(S, L, 'The boiler bursts.', 'bad'); setFire(S, 'B1', L); }
     else if (CONFIG.lateBurst) { S.boilerBurst = true; say(S, L, 'Far below, something bursts with a deep metallic boom.', 'bad'); }
   }},
-  {t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
+  {id: 'swells', t: 'The hymn swells', f: 'Plaster dust falls like snow. The song is nearly complete.', fx: (S, L) => activeInv(S).forEach(i => { if (autoTest(S, i, 'will') < 2) scare(S, i, 1, 'the swelling hymn', L); else say(S, L, `${nm(i)} grits their teeth through it.`); })},
 ];
 
 // Act I safety net: from the second story beat on, if the Reveal hasn't happened, the house points at one piece of evidence still waiting
@@ -532,14 +532,14 @@ function mythosPhase(S) {
   }
   S.threat++;
   const bi = beatsOf(S).indexOf(S.threat), beat = BEATS[bi];
-  let title, flavor;
-  if (beat) { title = beat.t; flavor = beat.f; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && bi > 0) evidenceHint(S, L); }
+  let title, flavor, img;
+  if (beat) { title = beat.t; flavor = beat.f; img = beat.id; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && bi > 0) evidenceHint(S, L); }
   else {
     const scale = (S.threatMax || 15) / 15;
     const opts = MYTHOS.filter(m => (!m.min || S.threat >= Math.round(m.min * scale)) && !S.mythosUsed.slice(-4).includes(m.id));
     const ev = pick(opts);
     S.mythosUsed.push(ev.id);
-    title = ev.t; flavor = ev.f; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); ev.fx(S, L);
+    title = ev.t; flavor = ev.f; img = ev.id; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); ev.fx(S, L);
   }
   if (S.phase === 'play') spreadFire(S, L);
   const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };
@@ -555,7 +555,7 @@ function mythosPhase(S) {
     S.inv.forEach(i => i.moveActs = 0);
     log(S, `Round ${S.round}.`, 'round');
   }
-  story(S, title, flavor + '\n\n' + L.map(l => (l.k === 'round' ? '' : '• ') + l.t).join('\n'), 'mythos');
+  story(S, title, flavor + '\n\n' + L.map(l => (l.k === 'round' ? '' : '• ') + l.t).join('\n'), 'mythos', img);
 }
 
 // --------------------------------------------------------- the reveal

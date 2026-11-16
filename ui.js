@@ -9,7 +9,7 @@ const app = $('#app');
 const CELL = 140;
 // art that has been dropped in (art/rooms/<id>.webp); everything else uses placeholder floors
 const PCLIP = '<clipPath id="pclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath>';
-const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara', 'elias', 'dex', 'agnes', 'juno'], monsters: ['orderly']};
+const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara', 'elias', 'dex', 'agnes', 'juno'], monsters: ['orderly'], events: []};
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
@@ -392,7 +392,9 @@ function openModal(html, cls = '') {
 }
 function info(title, html, btnLabel = 'Continue', cls = '') {
   return new Promise(res => {
-    const m = openModal(`<h2>${title}</h2>${html}<div class="btns"><button class="primary" data-x="ok">${btnLabel}</button></div>`, cls);
+    const pm = html.match(/^<div class="spic">[\s\S]*?<\/div>/), pic = pm ? pm[0] : '';
+    if (pic) html = html.slice(pic.length);
+    const m = openModal(`${pic}<h2>${title}</h2>${html}<div class="btns"><button class="primary" data-x="ok">${btnLabel}</button></div>`, cls);
     m.addEventListener('click', e => { if (e.target.closest('[data-x="ok"]')) { m.remove(); res(); } });
   });
 }
@@ -476,6 +478,26 @@ function queueStories(S) {
   for (const s of S.stories) if (s.seq > G.seenStory) { G.storyQ.push(s); G.seenStory = s.seq; }
   pumpStories();
 }
+// story pictures: room art for explored rooms; event art (art/events/<id>.webp) for Mythos, with a painted-style placeholder until it exists
+const EVENT_THEME = {
+  radiators: ['#6b3b1f', 'pipes'], bell: ['#5a4a2a', 'sound'], lights: ['#2b2a3a', 'dark'], name: ['#3a2f4a', 'sound'],
+  breath: ['#2f4a5a', 'calm'], footsteps: ['#2a4250', 'steps'], gramophone: ['#5a3a2a', 'sound'], cold: ['#1f3f5a', 'water'],
+  whisper: ['#2a2238', 'dark'], seep: ['#1f3a50', 'water'], quiet: ['#26262a', 'calm'], hymn: ['#3d2f5a', 'sound'],
+  settles: ['#4a3a2a', 'pipes'], sing: ['#1f3550', 'water'], swells: ['#4a2f3f', 'sound'],
+};
+function storyPic(img) {
+  if (!img) return '';
+  if (img.startsWith('room:')) { const r = img.slice(5); return ART.rooms.includes(r) ? `<div class="spic"><img src="art/rooms/${r}.webp" alt=""></div>` : ''; }
+  if (ART.events.includes(img)) return `<div class="spic"><img src="art/events/${img}.webp" alt=""></div>`;
+  const [c, motif] = EVENT_THEME[img] || ['#2a2a2a', 'calm'];
+  let m = '';
+  if (motif === 'water') m = Array.from({length: 6}, (_, i) => `<path d="M-20 ${120 + i * 26} q40 -14 80 0 t80 0 t80 0 t80 0 t80 0 t80 0" fill="none" stroke="#9cc6e8" stroke-opacity="${0.12 + i * 0.05}" stroke-width="3"/>`).join('');
+  else if (motif === 'sound') m = Array.from({length: 6}, (_, i) => `<circle cx="240" cy="150" r="${30 + i * 32}" fill="none" stroke="#e8d9b0" stroke-opacity="${0.35 - i * 0.05}" stroke-width="2.5"/>`).join('');
+  else if (motif === 'pipes') m = Array.from({length: 7}, (_, i) => `<rect x="${40 + i * 62}" y="0" width="14" height="270" fill="#c98a4a" opacity="${0.12 + (i % 3) * 0.06}"/>`).join('');
+  else if (motif === 'steps') m = Array.from({length: 6}, (_, i) => `<ellipse cx="${90 + i * 60}" cy="${200 - i * 18 + (i % 2) * 26}" rx="11" ry="20" fill="#bfe0f0" opacity="${0.12 + i * 0.05}"/>`).join('');
+  else if (motif === 'dark') m = `<circle cx="240" cy="130" r="46" fill="#d8dcff" opacity=".22"/><circle cx="262" cy="118" r="44" fill="${c}"/>`;
+  return `<div class="spic"><svg viewBox="0 0 480 270" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="sp-${img}" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="${c}"/><stop offset="1" stop-color="#07050a"/></radialGradient></defs><rect width="480" height="270" fill="url(#sp-${img})"/>${m}</svg></div>`;
+}
 async function pumpStories() {
   if (G.showingStory) return;
   G.showingStory = true;
@@ -483,7 +505,7 @@ async function pumpStories() {
     const s = G.storyQ.shift();
     if (s.kind === 'mythos') { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500); }
     const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: 'Chapter 1', insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
-    await info(esc(s.title), `<div class="eyebrow">${label}</div>${para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
+    await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
     if ((s.kind === 'won' || s.kind === 'lost') && G.S) await showInsanityResults(G.S);
   }
   G.showingStory = false;
@@ -673,6 +695,7 @@ function showRules() {
     <h3>Actions</h3><p><b>Move</b> up to 2 spaces (tap Move, then a lit space; you can split it around another action). <b>Explore</b> a door token. <b>Search</b> a 🔍 token. <b>Interact</b> with a ❗ or person. <b>Attack</b> a monster (tap it). <b>Trade</b> with someone in your space. <b>Use</b> items from your card. Tap any token for details.</p>
     <h3>Evading</h3><p>If a monster is in your space, you must pass an evade test before any action except Attack. Fail and the action is lost — and it hits you.</p>
     <h3>Tests</h3><p>Roll one die per point of skill: ✦ is a success, 🔍 can be turned into a success by spending a Clue (not in Darkness), blank is nothing.</p>
+    <h3>Same rules for everyone</h3><p>Each action always tests the same skill against the same target, whoever attempts it — forcing the jammed door is Strength, need 1, for all. Only the number of dice differs, because it comes from that investigator's skill. The text describing the attempt changes with each character's background; it is flavour and never changes the result.</p>
     <h3>Damage & Horror</h3><p>Taken as cards; some stay face up with lasting effects. When Damage reaches Health you are <b>Wounded</b> (one Move action per round); when Horror reaches Sanity you go <b>Insane</b> and draw a secret card. The second time either happens, you are eliminated — and the rest of you have until the end of the next round to win.</p>
     <h3>Spells</h3><p>You see a spell’s front; its back stays hidden until you cast it, then you resolve the back — a bonus or a price — and gain a fresh copy with a new hidden back. Anyone can cast; Lore helps.</p>
     <h3>Puzzles</h3><p>Some ❗ tokens are puzzles. You get steps equal to the skill shown (+1 per Clue, not in Darkness). Stop any time — progress is kept, and anyone can carry on later.</p>
