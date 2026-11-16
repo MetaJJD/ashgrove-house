@@ -170,25 +170,23 @@ const ACT = {
     }
     log(D, `${nm(inv)} explores: ${ROOMS[t.room].n}.`, 'good');
     revealRoom(D, t.room, inv);
-    // the door is open: step through into the new room (free, part of this action), or stay put
-    if (ctx.choose && passable(D, t.link) && tidePass(D, t.link, t.to)) {
-      const there = monAt(D, t.to).map(m => MONSTERS[m.type].n), fire = fireAt(D, t.to), deep = inv.id !== 'nell' && waterAt(D, t.to) >= 2;
-      const warn = [there.length ? `Waiting just inside: ${there.join(', ')}.` : '', fire ? 'The doorway is burning (1 Damage).' : '', deep ? 'The water inside is deep (Agility test or 1 Damage).' : ''].filter(Boolean).join(' ');
-      const go = await ctx.choose(`${t.link.stairs != null ? 'The way down' : 'The door'} is open: ${ROOMS[t.room].n}`, [
-        {label: `Enter ${ROOMS[t.room].n}`, sub: `Step through to ${SP[t.to].n}. No extra action.`, v: 'in'},
-        {label: `Stay in ${ROOMS[roomOf(inv.space)].n}`, sub: `Remain at ${SP[inv.space].n}.`, v: 'stay'}], warn, true);
-      if (go === 'in') {
-        inv.space = t.to;
-        npcs(D).forEach(n => { if (n.escort === inv.id) n.space = t.to; });
-        log(D, `${nm(inv)} steps through into ${SP[t.to].n}.`);
-        if (deep) { const s = await ctx.test('agi', {label: 'Wade through the deep water', need: 1}); if (s < 1) hurt(D, inv, 1, 'the sea drags at them'); }
-        if (fire) {
-          if (D.ext > 0) { D.ext--; delete D.fire[t.to]; log(D, `${nm(inv)} beats out the fire in ${SP[t.to].n}.`, 'good'); }
-          else hurt(D, inv, 1, `stepping through the fire in ${SP[t.to].n}`);
-        }
-      }
-    }
+    // the door is open: once the new room has been shown, the explorer may step through (free) or stay put
+    if (passable(D, t.link) && tidePass(D, t.link, t.to)) D.offer = {who: inv.id, to: t.to, room: t.room, stairs: t.link.stairs != null};
     return true;
+  },
+  async enter(D, inv, arg, ctx) {
+    const o = D.offer; delete D.offer;
+    if (!o || o.who !== inv.id || arg !== 'in') return 'free';
+    const fire = fireAt(D, o.to), deep = inv.id !== 'nell' && waterAt(D, o.to) >= 2;
+    inv.space = o.to;
+    npcs(D).forEach(n => { if (n.escort === inv.id) n.space = o.to; });
+    log(D, `${nm(inv)} steps through into ${SP[o.to].n}.`);
+    if (deep) { const s = await ctx.test('agi', {label: 'Wade through the deep water', need: 1}); if (s < 1) hurt(D, inv, 1, 'the sea drags at them'); }
+    if (fire) {
+      if (D.ext > 0) { D.ext--; delete D.fire[o.to]; log(D, `${nm(inv)} beats out the fire in ${SP[o.to].n}.`, 'good'); }
+      else hurt(D, inv, 1, `stepping through the fire in ${SP[o.to].n}`);
+    }
+    return 'free';
   },
   async search(D, inv, id, ctx) {
     const tok = D.tokens.find(t => t.id === id && t.k === 'search' && t.sp === inv.space);
@@ -326,6 +324,6 @@ function hitMonster(D, m, dmg, who, by) {
     else if (M.boss && SCN.bossStory) story(D, SCN.bossStory[0], SCN.bossStory[1], 'story');
   } else log(D, `${who} for ${dmg}. The ${M.n} is hurt.`);
 }
-const NO_EVADE = ['attack', 'start', 'endturn', 'endphase', 'extinguish', 'tidetables'];
-const FREE_KINDS = ['move', 'start', 'endturn', 'endphase', 'tidetables'];
+const NO_EVADE = ['enter', 'attack', 'start', 'endturn', 'endphase', 'extinguish', 'tidetables'];
+const FREE_KINDS = ['enter', 'move', 'start', 'endturn', 'endphase', 'tidetables'];
 const needsAction = (D, kind) => !FREE_KINDS.includes(kind) && D.actions < 1;

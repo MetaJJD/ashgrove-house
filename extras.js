@@ -277,9 +277,10 @@ const slideSolved = grid => !grid.some(r => r.includes('K'));
 // called after every action (UI and sims): flames hurt anyone who acts in them; turn ends when spent
 function afterAction(D, kind) {
   const inv = D.active >= 0 ? D.inv[D.active] : null;
-  if (inv && !['move', 'extinguish', 'start', 'endturn', 'endphase'].includes(kind) && fireAt(D, inv.space)) hurt(D, inv, 1, 'acting in the flames');
+  if (kind !== 'explore') delete D.offer;
+  if (inv && !['enter', 'move', 'extinguish', 'start', 'endturn', 'endphase'].includes(kind) && fireAt(D, inv.space)) hurt(D, inv, 1, 'acting in the flames');
   // Chapter 2: acting while Submerged costs an Agility test (need 1) or 1 Damage (Nell is at home in the water)
-  if (inv && !inv.out && !['move', 'start', 'endturn', 'endphase', 'tidetables'].includes(kind) && waterAt(D, inv.space) >= 2 && inv.id !== 'nell' && autoTest(D, inv, 'agi') < 1) hurt(D, inv, 1, 'the cold, dragging water');
-  if (D.active >= 0) { const a = D.inv[D.active]; if (a.out || (D.actions <= 0 && D.moveLeft <= 0)) { D.done[D.active] = true; D.active = -1; D.moveLeft = 0; } }
+  if (inv && !inv.out && !['enter', 'move', 'start', 'endturn', 'endphase', 'tidetables'].includes(kind) && waterAt(D, inv.space) >= 2 && inv.id !== 'nell' && autoTest(D, inv, 'agi') < 1) hurt(D, inv, 1, 'the cold, dragging water');
+  if (D.active >= 0) { const a = D.inv[D.active]; if (a.out || (D.actions <= 0 && D.moveLeft <= 0 && !(D.offer && D.offer.who === a.id))) { D.done[D.active] = true; D.active = -1; D.moveLeft = 0; } }
   if (kind === 'endturn' && D.active >= 0) { D.done[D.active] = true; D.active = -1; }
 }

@@ -648,7 +648,9 @@ function rollTest(D, inv, sk, o = {}) {
 
 // story queue
 function queueStories(S) {
-  if (G.seenStory == null) G.seenStory = S.stories.length ? S.stories[S.stories.length - 1].seq - (S.round === 1 && S.storySeq <= 1 ? 1 : 0) : 0;
+  // a game that has only just begun shows every opening pop-up (the road choice, the chapter intro, old friends…); joining later shows only what comes next
+  const fresh = S.round === 1 && S.active < 0 && !(S.done || []).some(Boolean);
+  if (G.seenStory == null) G.seenStory = fresh ? 0 : S.stories.length ? S.stories[S.stories.length - 1].seq : 0;
   for (const s of S.stories) if (s.seq > G.seenStory) { G.storyQ.push(s); G.seenStory = s.seq; }
   pumpStories();
 }
@@ -709,6 +711,20 @@ function showSummary(S) {
   return info(won ? (S.partial ? 'Half a victory' : 'The night is over') : `${(SCENARIOS[S.sc] || SCN).place} keeps its own`, `<div class="eyebrow">${won ? (S.partial ? 'Partial victory' : 'Victory') : 'Defeat'} · ${(SCENARIOS[S.sc] || SCN).chapter} · ${diff} · ${S.round} rounds</div>
     <div class="stats" style="margin:8px 0 4px"><span class="stat">Goal <b>${goal}</b></span><span class="stat">Evidence <b>${S.evidence.length}/${CONFIG.evidenceNeeded}</b></span><span class="stat">Rooms found <b>${Object.values(S.rooms).filter(r => r.rev).length}/${Object.keys(S.rooms).length}</b></span></div>${rows}`, 'Close', 'story summary');
 }
+// after exploring: the new room is on the board and its story has been read; now enter it (free) or stay
+async function maybeOffer() {
+  const S = G.S;
+  if (!S || !S.offer || G.offering || G.showingStory || G.storyQ.length || !canAct() || S.inv[S.active].id !== S.offer.who) return;
+  const inv = S.inv[S.active], o = S.offer, R = ROOMS[o.room];
+  const there = monAt(S, o.to).map(m => MONSTERS[m.type].n), fire = fireAt(S, o.to), deep = inv.id !== 'nell' && waterAt(S, o.to) >= 2;
+  const warn = [there.length ? `Waiting inside: ${there.join(', ')}.` : '', fire ? 'The doorway is burning (1 Damage).' : '', deep ? 'The water inside is deep (Agility test or 1 Damage).' : ''].filter(Boolean).join(' ');
+  G.offering = true;
+  const v = await choose(`${INVD(inv.id).name}: go in?`, [
+    {label: `Enter ${R.n}`, sub: `Move to ${SP[o.to].n}. Free action.`, v: 'in'},
+    {label: `Stay in ${ROOMS[roomOf(inv.space)].n}`, sub: `Remain at ${SP[inv.space].n}.`, v: 'stay'}], warn, true);
+  G.offering = false;
+  if (G.S && G.S.offer) { await doAction('enter', v); if (v === 'in') camFollow(G.S.inv.find(x => x.id === o.who).space); }
+}
 async function pumpStories() {
   if (G.showingStory) return;
   G.showingStory = true;
@@ -721,6 +737,7 @@ async function pumpStories() {
     if ((s.kind === 'won' || s.kind === 'lost') && G.S) { await showInsanityResults(G.S); await showSummary(G.S); await legacyEnd(G.S); }
   }
   G.showingStory = false;
+  setTimeout(maybeOffer, 60);
   if (G.afterStories) { const f = G.afterStories; G.afterStories = null; f(); }
 }
 
