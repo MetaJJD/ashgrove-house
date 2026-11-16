@@ -607,6 +607,8 @@ function theReveal(S) {
     spawn(S, 'marrow', cand[0] || 'C2');
     const boss = S.monsters.find(m => m.type === 'marrow'); if (boss) boss.hp = CONFIG.conductorHp[0] + CONFIG.conductorHp[1] * S.inv.length;
   } else if (S.goal === 'A') {
+    // with only two investigators one strong pair of hands finishes the Engine too easily: twist two more of its pipes
+    if (S.inv.length === 2 && S.puzzles.engine && S.puzzles.engine.grid) { const ok = S.puzzles.engine.grid.map((t, i) => t.path && t.r === 0 ? i : -1).filter(i => i >= 0); shuffle(ok).slice(0, 2).forEach(i => S.puzzles.engine.grid[i].r = 2); }
     const t = 'The pieces fit together. Marrow built a machine — the Resonance Engine — in Hydrotherapy, to amplify the song of the lake. It is still running, and the hymn is building toward its final note.\n\nYOUR GOAL: Bring the Valve Wheel from the Boiler Room to the Engine in Hydrotherapy, then turn its valves until the lake water drains away from the machine (a pipe puzzle: Interact, steps equal to your Strength).\n\nDr. Marrow is waiting for you down there.';
     story(S, 'The Reveal: the Resonance Engine', t, 'reveal');
     if (S.rooms.hydro.rev) spawn(S, 'marrow', 'Y3'); else S.pendingBoss = 'Y3';

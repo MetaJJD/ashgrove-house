@@ -85,7 +85,7 @@ const INTERACT = {
       return true;
     }},
   engine: {n: 'The Resonance Engine',
-    info: S => S.goal === 'A' ? `A machine of brass horns and copper coils. Progress: ${S.engine}/${CONFIG.engineNeed}.` : 'A machine of brass horns and copper coils, humming one endless note. You don’t yet know what it is for.',
+    info: S => S.goal === 'A' ? 'A machine of brass horns and copper coils. Turn its valves until the pipes run clear from end to end.' : 'A machine of brass horns and copper coils, humming one endless note. You don’t yet know what it is for.',
     can: (S, inv) => S.goal !== 'A' ? [false, 'You don’t know what it is for yet.'] : !invAt(S, inv.space).some(i => i.items.includes('valve')) ? [false, 'You need the Valve Wheel here.'] : [true],
     label: () => 'Turn the valves (puzzle · Strength)',
     async run(D, inv, ctx) {
