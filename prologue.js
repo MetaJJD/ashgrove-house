@@ -72,6 +72,6 @@ function applyPrologue(S, pr) {
   if (fx.grace) S.grace = Math.max(0, (S.grace != null ? S.grace : CONFIG.graceRounds) + fx.grace);
   if (fx.evAll) { S.evLive = Object.keys(EVIDENCE).filter(id => S.spots[id]); S.evLive.forEach(id => S.spots[id] = {c: 'ev:' + id}); }
   if (fx.early) S.proSpawn = fx.early;
-  S.lgTitle = 'Before the doors';
-  S.lgIntro = `On the road: ${P.t}. You chose to ${C.t.charAt(0).toLowerCase() + C.t.slice(1)}. ${C.d}` + (S.lgIntro ? '\n\n' + S.lgIntro : '');
+  // its own pop-up, before the chapter opens: what the choice led to, and what it means for this scenario
+  story(S, P.t, `You chose: ${C.t}.\n\n${C.d}\n\nFor this scenario: ${prologueFx(fx)}.`, 'road', 'road');
 }

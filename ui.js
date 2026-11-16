@@ -385,7 +385,7 @@ function topHTML(S) {
 const goalHelp = S => SCN.goalHelp(S);
 function drawerHTML(S) {
   return `<div class="dh"><h3>Journal</h3><button class="small ghost" data-act="drawer">Close</button></div>
-    ${S.pro ? `<div class="ev"><div class="eyebrow">On the road · ${esc(S.pro.t)}</div><div>${esc(S.pro.choice)}</div></div>` : ''}
+    ${S.pro ? `<div class="ev"><div class="eyebrow">On the road · ${esc(S.pro.t)}</div><div>${esc(S.pro.choice)}</div><small>${esc(S.pro.sum)}</small></div>` : ''}
     <div class="ev goalbox"><div class="eyebrow">Your goal</div><div class="gt">${esc(goalText(S))}</div><p>${esc(goalHelp(S))}</p>
       ${S.lastRound && S.phase === 'play' ? `<p class="dl">One of you has fallen. You have until the end of round ${S.lastRound}.</p>` : ''}
       ${!S.goal && S.lastHint ? `<p class="hint"><b>Latest lead:</b> ${esc(S.lastHint)}</p>` : ''}
@@ -710,7 +710,7 @@ async function pumpStories() {
     const s = G.storyQ.shift();
     if (s.kind === 'mythos' && SET.shake) { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500); }
     Snd.play({mythos: 'gong', evidence: 'chime', reveal: 'reveal', won: 'win', lost: 'lose', room: 'door', dire: 'sting'}[s.kind]);
-    const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: (SCENARIOS[G.S && G.S.sc] || SCN).chapter, insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
+    const label = {road: (SCENARIOS[G.S && G.S.sc] || SCN).text.road, mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: (SCENARIOS[G.S && G.S.sc] || SCN).chapter, insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
     await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${s.kind === 'mythos' ? mythosBody(s.text) : para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
     if ((s.kind === 'won' || s.kind === 'lost') && G.S) { await showInsanityResults(G.S); await showSummary(G.S); await legacyEnd(G.S); }
   }
