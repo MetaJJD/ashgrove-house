@@ -350,7 +350,7 @@ function hudHTML(S) {
     return `<div class="${cls}" data-act="tok" data-kind="inv" data-id="${v.id}">
       ${portraitSVG(v.id, 46)}
       <div class="ci"><div class="cn">${esc(d.name.replace('Sister ', 'Sr. '))}</div>
-        <div class="cs"><span class="h" title="Damage / Health">♥ ${d.hp - v.dmg.length}</span><span class="s" title="Horror / Sanity">✺ ${d.san - v.hor.length}</span><span class="c" title="Clues">🔍 ${v.clues}</span>${v.wounded ? '<span class="tag w">Wounded</span>' : ''}${v.insane ? '<span class="tag i">Insane</span>' : ''}</div>
+        <div class="cs"><span class="h" title="Damage / Health">♥ ${maxHp(v) - v.dmg.length}</span><span class="s" title="Horror / Sanity">✺ ${maxSan(v) - v.hor.length}</span><span class="c" title="Clues">🔍 ${v.clues}</span>${v.wounded ? '<span class="tag w">Wounded</span>' : ''}${v.insane ? '<span class="tag i">Insane</span>' : ''}</div>
         <div class="cst">${state}${G.mode === 'online' ? ' · ' + esc(pname(v.owner)) : ''}</div></div>${btn}</div>`;
   }).join('');
   let ctrl = '';
@@ -458,9 +458,10 @@ function renderSheet() {
     const up = [...v.dmg.filter(c => DMG_CARDS[c].up).map(c => DMG_CARDS[c]), ...v.hor.filter(c => HOR_CARDS[c].up).map(c => HOR_CARDS[c])];
     h += `<div class="sh-head">${portraitSVG(v.id, 64)}<div><h2>${esc(d.name)}</h2><div class="role">${esc(d.role)}${v.out ? ' · Lost' : ''}${v.wounded ? ' · <b class="w">Wounded</b>' : ''}${v.insane ? ' · <b class="i">Insane</b>' : ''}</div></div></div>
       <div class="stats">${SKILLS.map(s => { const val = skillVal(S, v, s); return `<span class="stat ${val < d[s] ? 'low' : val > d[s] ? 'high' : ''}">${SKILL_SHORT[s]} <b>${val}</b></span>`; }).join('')}</div>
-      <div class="bars"><span>Health</span><div class="bar hp"><i style="width:${100 * Math.max(0, d.hp - v.dmg.length) / d.hp}%"></i></div><span>${d.hp - v.dmg.length}/${d.hp}</span>
-      <span>Sanity</span><div class="bar san"><i style="width:${100 * Math.max(0, d.san - v.hor.length) / d.san}%"></i></div><span>${d.san - v.hor.length}/${d.san}</span></div>
+      <div class="bars"><span>Health</span><div class="bar hp"><i style="width:${100 * Math.max(0, maxHp(v) - v.dmg.length) / maxHp(v)}%"></i></div><span>${maxHp(v) - v.dmg.length}/${maxHp(v)}</span>
+      <span>Sanity</span><div class="bar san"><i style="width:${100 * Math.max(0, maxSan(v) - v.hor.length) / maxSan(v)}%"></i></div><span>${maxSan(v) - v.hor.length}/${maxSan(v)}</span></div>
       <p class="abil"><b>${esc(d.ability)}.</b> ${esc(d.text)}</p>
+      ${v.lg ? legacyChips(v) : ''}
       ${up.length ? `<div class="eyebrow">Face-up cards</div><div class="chips2">${up.map(c => `<span class="chip2 bad" title="${esc(c.t)}">${esc(c.n)}</span>`).join('')}</div>` : ''}
       <div class="eyebrow">Possessions · ${v.clues} Clue${v.clues === 1 ? '' : 's'}</div>`;
     const mineActive = me === v;
@@ -579,6 +580,10 @@ function rollTest(D, inv, sk, o = {}) {
   if (sk === 'lore' && inv.id === 'elias' && faces.includes('B')) { faces = faces.map(f => f === 'B' ? rollFace(D, luck) : f); rerolled = true; }
   const keen = sk === 'obs' && inv.id === 'juno';
   const dark = inDark(D, inv);
+  const scarred = !!(inv.scarFresh && inv.scarFresh[sk]); if (inv.scarFresh) delete inv.scarFresh[sk];
+  // Fresh Eyes (a newcomer in legacy mode): once per scenario, a failing roll gets its blanks rerolled
+  let freshUsed = false;
+  if (inv.lg && inv.lg.fresh && faces.filter(f => f === 'S' || (f === 'C' && keen)).length < (o.need || 1) && faces.includes('B')) { faces = faces.map(f => f === 'B' ? rollFace(D, luck) : f); inv.lg.fresh = 0; freshUsed = true; }
   const forced = pityForce(D, inv, pkey, faces, o.need, f => f === 'S' || (f === 'C' && keen));
   return new Promise(resolve => {
     let spent = 0;
@@ -599,6 +604,8 @@ function rollTest(D, inv, sk, o = {}) {
       const s = succ(), notes = [];
       if (rerolled) notes.push('Erudite: blanks rerolled once.');
       if (forced) notes.push('Persistence pays off.');
+      if (freshUsed) notes.push('Fresh Eyes: blanks rerolled once.');
+      if (scarred) { const sc = inv.lg.scars.find(x => x.sk === sk); notes.push(`${sc ? sc.n : 'An old injury'}: −1 die on the first ${SKILL_NAMES[sk]} test.`); }
       if (keen) notes.push('Keen Eye: 🔍 counts as a success.');
       if (dark && faces.includes('C') && !keen) notes.push('Darkness: you cannot spend Clues here.');
       $('#dsum', m).innerHTML = `${s} success${s === 1 ? '' : 'es'}${o.need ? (s >= o.need ? ' — <span class="pass">passed</span>' : ' — <span class="fail">failed</span>') : ''}${notes.length ? `<br><small>${notes.join(' ')}</small>` : ''}<span class="dout">${esc(afterLine())}</span>`;
@@ -697,7 +704,7 @@ async function pumpStories() {
     Snd.play({mythos: 'gong', evidence: 'chime', reveal: 'reveal', won: 'win', lost: 'lose', room: 'door', dire: 'sting'}[s.kind]);
     const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: 'Chapter 1', insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
     await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${s.kind === 'mythos' ? mythosBody(s.text) : para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
-    if ((s.kind === 'won' || s.kind === 'lost') && G.S) { await showInsanityResults(G.S); await showSummary(G.S); }
+    if ((s.kind === 'won' || s.kind === 'lost') && G.S) { await showInsanityResults(G.S); await showSummary(G.S); await legacyEnd(G.S); }
   }
   G.showingStory = false;
   if (G.afterStories) { const f = G.afterStories; G.afterStories = null; f(); }
@@ -864,7 +871,16 @@ function render() {
   if (G.screen === 'home') renderHome();
   else if (G.screen === 'setup') renderSetup();
   else if (G.screen === 'lobby') renderLobby();
+  else if (G.screen === 'casebook') renderCasebook();
   else if (G.screen === 'loading') app.innerHTML = `<div class="home"><div class="title"><h1>Greywater</h1><p id="loadmsg">Knocking on the door…</p></div></div>`;
+}
+function legacyChips(v) {
+  const L = v.lg, c = [];
+  if (!L.vet) c.push(`<span class="chip2" title="First scenario in this campaign: +1 Clue at the start, and one failed roll per scenario rerolls its blanks.">Fresh Eyes${L.fresh ? '' : ' (used)'}</span>`);
+  (L.talents || []).forEach(t => c.push(`<span class="chip2" title="${esc(TALENTS[t].t)}">${esc(TALENTS[t].n)}${v.used && v.used[t] ? ' (used)' : ''}</span>`));
+  (L.scars || []).forEach(x => c.push(`<span class="chip2 bad" title="−1 die on the first ${SKILL_NAMES[x.sk]} test each scenario.">${esc(x.n)}</span>`));
+  if (L.haunted) c.push(`<span class="chip2 bad" title="Starts each scenario with 1 Horror.">Haunted</span>`);
+  return c.length ? `<div class="eyebrow">Casebook</div><div class="chips2">${c.join('')}</div>` : '';
 }
 function invCard(d, extra = '', cls = '', act = '') {
   return `<button class="invc ${cls}" ${act}>${extra}
@@ -888,7 +904,7 @@ function renderHome() {
     <div class="card"><h2>Play on this device</h2>
       <p class="dim" style="margin-top:0">Pass the device around, or play solo with two investigators.</p>
       <div class="row"><button data-act="setup">New game</button>${local && local.phase === 'play' && local.v === 2 ? `<button data-act="resume">Resume (round ${local.round})</button>` : ''}</div></div>
-    <div class="card"><div class="row"><button class="ghost" data-act="rules">How to play</button><button class="ghost" data-act="install">Install as an app</button><button class="ghost" data-act="settings">Settings</button></div></div>
+    <div class="card"><div class="row"><button class="ghost" data-act="rules">How to play</button><button class="ghost" data-act="install">Install as an app</button><button class="ghost" data-act="settings">Settings</button><button class="ghost" data-act="casebook">Casebook</button></div></div>
   </div>`;
   $('#code').value = codeVal; $('#pname').value = nameVal;
 }
@@ -896,13 +912,21 @@ function diffPicker(canPick, cur) {
   cur = cur || G.diff || 'std';
   return `<div class="card diffc"><h2>Difficulty</h2><div class="seg">${Object.entries(DIFF).map(([k, d]) => `<button class="${cur === k ? 'primary' : ''}" ${canPick ? `data-act="diff" data-d="${k}"` : 'disabled'}>${d.n}</button>`).join('')}</div><p class="dim" style="margin:8px 0 0">${DIFF[cur].sub}</p></div>`;
 }
+function legacyPicker(canPick, on) {
+  return `<label class="card setrow legacyc"><span><b>Legacy mode</b><small>Investigators remember this night and carry rewards, keepsakes and scars into later scenarios. Death is permanent.${canPick ? '' : ' (The host decides.)'}</small></span><input type="checkbox" data-act="legacy" ${on ? 'checked' : ''} ${canPick ? '' : 'disabled'}></label>`;
+}
+function cbTag(id, legacy) {
+  if (!legacy) return '';
+  if (Casebook.retired(id)) return '<span class="tag">Retired</span>';
+  return Casebook.isVet(id) ? '<span class="tag">Veteran</span>' : '';
+}
 function renderSetup() {
   const p = G.localPicks;
   app.innerHTML = `<div class="home">
     <div class="row" style="justify-content:space-between"><h2 style="font-size:30px">Choose investigators</h2><button class="ghost small" data-act="home">Back</button></div>
     <p class="dim">Pick 2 to 4. Playing alone? Pick two and control both.</p>
-    <div class="invgrid">${INVESTIGATORS.map(d => { const i = p.indexOf(d.id); return invCard(d, i >= 0 ? `<span class="tag">#${i + 1}</span>` : '', i >= 0 ? 'mine' : '', `data-act="lpick" data-id="${d.id}"`); }).join('')}</div>
-    ${diffPicker(true)}
+    <div class="invgrid">${INVESTIGATORS.map(d => { const i = p.indexOf(d.id), ret = G.legacy && Casebook.retired(d.id); return invCard(d, i >= 0 ? `<span class="tag">#${i + 1}</span>` : cbTag(d.id, G.legacy), i >= 0 ? 'mine' : ret ? 'taken' : '', ret ? 'disabled' : `data-act="lpick" data-id="${d.id}"`); }).join('')}</div>
+    ${diffPicker(true)}${legacyPicker(true, G.legacy)}
     <div class="row" style="margin-top:16px"><button class="primary" data-act="lbegin" ${p.length >= 2 ? '' : 'disabled'}>Enter Greywater</button></div></div>`;
 }
 function renderLobby() {
@@ -916,7 +940,7 @@ function renderLobby() {
     <div class="card"><h2>At the door</h2><div class="list">${(L.seats || []).map(s => `<div class="row" style="justify-content:space-between"><span>${esc(pname(s.uid))}${s.uid === L.host ? ' <small>(host)</small>' : ''}</span><small>${(s.picks || []).filter(id => c[id] === s.uid).map(id => INVD(id).name).join(', ') || 'choosing…'}</small></div>`).join('')}</div></div>
     <div class="card"><h2>Choose your investigators</h2><p class="dim" style="margin:0">Tap to claim. 2 to 4 in total — one player may control several.</p>
       <div class="invgrid">${INVESTIGATORS.map(d => { const o = c[d.id], mine = o === G.me, taken = o && !mine; return invCard(d, mine ? '<span class="tag">Yours</span>' : taken ? `<span class="tag">${esc(pname(o))}</span>` : '', mine ? 'mine' : taken ? 'taken' : '', seated && !taken ? `data-act="spick" data-id="${d.id}"` : 'disabled'); }).join('')}</div>
-      ${diffPicker(isHost, L.diff)}
+      ${diffPicker(isHost, L.diff)}${legacyPicker(isHost, L.legacy)}
       <div class="row" style="margin-top:16px">${isHost ? `<button class="primary" data-act="obegin" ${n >= 2 ? '' : 'disabled'}>Enter Greywater</button>${n < 2 ? '<small class="dim">At least 2 investigators.</small>' : ''}` : `<small>Waiting for ${esc(pname(L.host))} to begin…</small>`}</div></div></div>`;
 }
 function showRules() {
@@ -927,6 +951,7 @@ function showRules() {
     <h3>Evading</h3><p>If a monster is in your space, you must pass an evade test before any action except Attack. Fail and the action is lost — and it hits you.</p>
     <h3>Tests</h3><p>Roll one die per point of skill: ✦ is a success, 🔍 can be turned into a success by spending a Clue (not in Darkness), blank is nothing.</p>
     <h3>Same rules for everyone</h3><p>Each action always tests the same skill against the same target, whoever attempts it — forcing the jammed door is Strength, need 1, for all. Only the number of dice differs, because it comes from that investigator's skill. The text describing the attempt changes with each character's background; it is flavour and never changes the result.</p>
+    <h3>Legacy mode</h3><p>Turn it on at setup (the host decides online). At the end of each scenario every survivor chooses one reward to keep — a skill, Health or Sanity, an item, or a talent — from 3 options after a win or 2 after a loss. Face-up Damage and Horror cards you still hold become scars (−1 die on the first test of that skill each scenario); going insane leaves you Haunted (start with 1 Horror). You can spend a reward to heal instead. Death is permanent: a fallen investigator retires and leaves one possession to the next newcomer. Newcomers get Fresh Eyes (+1 Clue, and one failed roll per scenario rerolls its blanks) and catch up with half of the veterans' rewards. Records are kept in the Casebook on each player's own device.</p>
     <h3>Luck and the Director</h3><p><b>Bad-luck protection:</b> each time you fail the same check in a row, your dice get a little kinder, and the 3rd, 4th or 5th try in a row is a guaranteed pass — but only for checks that investigator has a fair chance at (at least 1 in 5). Sending the weakest character at a hard check over and over earns nothing. <b>The Director:</b> when the team is in real trouble, or cruising, dice luck, Mythos events, spawns and fire lean by at most 10% the other way. Both can be switched off in Settings for new games.</p>
     <h3>Damage & Horror</h3><p>Taken as cards; some stay face up with lasting effects. When Damage reaches Health you are <b>Wounded</b> (one Move action per round); when Horror reaches Sanity you go <b>Insane</b> and draw a secret card. The second time either happens, you are eliminated — and the rest of you have until the end of the next round to win.</p>
     <h3>Spells</h3><p>You see a spell’s front; its back stays hidden until you cast it, then you resolve the back — a bonus or a price — and gain a fresh copy with a new hidden back. Anyone can cast; Lore helps.</p>
@@ -949,7 +974,7 @@ document.addEventListener('click', async e => {
     case 'install': showInstall(); break;
     case 'setup': G.localPicks = []; G.screen = 'setup'; render(); break;
     case 'lpick': { const i = G.localPicks.indexOf(b.dataset.id); if (i >= 0) G.localPicks.splice(i, 1); else if (G.localPicks.length < 4) G.localPicks.push(b.dataset.id); render(); break; }
-    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {dir: SET.director, pity: SET.pity, diff: G.diff || 'std'}); N.mode = 'local'; saveLocal(N); onState(N); break; }
+    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {dir: SET.director, pity: SET.pity, diff: G.diff || 'std', legacy: G.legacy ? legacyFor(G.localPicks) : null}); N.mode = 'local'; saveLocal(N); onState(N); break; }
     case 'resume': { const L = loadLocal(); if (L) { clearSubs(); G.mode = 'local'; G.seenStory = L.storySeq; G.seenR = L.rseq; G.S = null; app.innerHTML = ''; onState(L); } break; }
     case 'host': hostGame(); break;
     case 'rehost': { const h = loadHost(); if (h) hostGame(h); break; }
@@ -972,6 +997,13 @@ document.addEventListener('click', async e => {
       doAction('endturn'); break;
     }
     case 'undo': undoLast(); break;
+    case 'casebook': G.screen = 'casebook'; render(); break;
+    case 'cbreset': if (await confirmBox('Start a new casebook?', 'Every investigator’s record, reward and scar on this device will be forgotten.')) { Casebook.reset(); render(); } break;
+    case 'legacy': {
+      if (G.screen === 'lobby') { if (!G.lobby || G.lobby.host !== G.me) break; G.lobby.legacy = !G.lobby.legacy; broadcast({t: 'lobby', L: G.lobby}); }
+      else { G.legacy = !G.legacy; G.localPicks = G.localPicks.filter(id => !(G.legacy && Casebook.retired(id))); }
+      render(); break;
+    }
     case 'diff': G.diff = b.dataset.d; if (G.screen === 'lobby' && G.lobby && G.lobby.host === G.me) { G.lobby.diff = G.diff; if (typeof broadcast === 'function') broadcast({t: 'lobby', L: G.lobby}); } render(); break;
     case 'settings': showSettings(); break;
     case 'endphase': closeSheet(); doAction('endphase'); break;

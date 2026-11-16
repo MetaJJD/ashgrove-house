@@ -19,7 +19,7 @@ function dirProgress(S) {
 function dirPressure(S) {
   const all = S.inv, alive = all.filter(v => !v.out);
   if (!alive.length) return 0;
-  const frac = v => { const d = INVD(v.id); return Math.min((d.hp - v.dmg.length) / d.hp + (v.wounded ? -0.25 : 0), (d.san - v.hor.length) / d.san + (v.insane ? -0.25 : 0)); };
+  const frac = v => { return Math.min((maxHp(v) - v.dmg.length) / maxHp(v) + (v.wounded ? -0.25 : 0), (maxSan(v) - v.hor.length) / maxSan(v) + (v.insane ? -0.25 : 0)); };
   const hurt = 1 - alive.reduce((a, v) => a + Math.max(0, frac(v)), 0) / alive.length + 0.5 * (all.length - alive.length) / all.length;
   const near = alive.filter(v => S.monsters.some(m => roomOf(m.space) === roomOf(v.space))).length / alive.length;
   const behind = S.threat / (S.threatMax || CONFIG.threatMax) - dirProgress(S);

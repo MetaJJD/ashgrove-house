@@ -453,6 +453,7 @@ const EPILOGUE = {
     lost: 'They found Mara’s cap on the shore the next morning, dry, folded, as if set down with care. The others lived because of what she did in that house. The ward she trained on now bears a small brass plaque with her name.',
     fell: 'Mara Voss fell before the end, still trying to reach whoever was hurt worst. The house took the rest soon after. Her watch was found stopped at the minute she died; the hymn, they say, has a gentle voice in it now that hushes the others to sleep.',
     takenMad: 'Mara stopped fighting some time before the doors sealed. She had begun counting the patients again, and found, to her relief, that she was one of them. She went to her bed in the ward without being asked. It had her name on it already.',
+    escaped: 'Mara got them out — or they got her out; afterwards nobody could say which. The doors opened at dawn onto a lake gone grey and ordinary. She went back to work the next night. She has not stopped working since.',
     taken: 'Mara Voss is still on duty at Greywater. On quiet nights you can see a nurse’s lamp moving window to window, checking on patients who are all, now, singing.',
   },
   elias: {
@@ -462,6 +463,7 @@ const EPILOGUE = {
     lost: 'Elias Crane’s spectacles were recovered from the house, one lens cracked. His notes, found in his coat, were what let the others finish it. His shop stands shuttered; someone leaves flowers at the door each autumn.',
     fell: 'Elias Crane died with a book in his hands, which is how he always assumed he would. It was the wrong book, and it did not save anyone. His shop was sold that winter; the new owner keeps finding slips of paper in the stock, all in the same hand, all reading: I was nearly right.',
     takenMad: 'By the end Elias understood the hymn perfectly — every interval, every word. He sat down in the chapel to write the commentary. He is writing it still, and each night the Choir sings what he has added.',
+    escaped: 'Elias crawled out through a broken window at first light, coat torn, notebook clutched to his chest. Greywater was not beaten; it simply let him go. He has spent every evening since trying to work out why.',
     taken: 'There is a new voice in the Greywater choir: an older man’s, precise, pronouncing every syllable exactly. He always did want to hear the words said aloud.',
   },
   dex: {
@@ -471,6 +473,7 @@ const EPILOGUE = {
     lost: 'Dex Holloway went down swinging, and it took the whole house to put him there. The others carried his cap out with them. At the gym on Tanner Street they rang the bell ten times for him.',
     fell: 'Dex Holloway went down before the last bell, and for the first time in his life he did not get up. The others did not last long without him. His lucky coin lies somewhere on the floor of Greywater, heads up.',
     takenMad: 'Somewhere in the last hour Dex stopped hearing the hymn as a threat and started hearing it as a crowd. He raised his fists to it, grinning. He is still in the ring, and the crowd has never once stopped cheering.',
+    escaped: 'Dex carried someone out on his back through the smoke, and did not stop walking until the road. The hymn did not end. It only got quieter, behind them. He has been listening for it ever since.',
     taken: 'Something heavy walks the corridors of Greywater now, keeping the rhythm with its fists on the walls. It was a man once, and a fighter. It keeps perfect time.',
   },
   agnes: {
@@ -480,6 +483,7 @@ const EPILOGUE = {
     lost: 'Sister Agnes was found kneeling, hands folded, face quite calm. Whatever she met at the end, she met it the way she met everything. The others lit a candle for her at the first church they passed, and it burned all night.',
     fell: 'Sister Agnes fell with a prayer half said. Nobody finished it for her; there was no one left who could. In the convent, a candle she lit before she set out burned down that same night and went out without a draught.',
     takenMad: 'In the end Sister Agnes got back what she had lost: certainty. The hymn gave it to her, whole and warm and without a single doubt in it. She sings louder than anyone, and she has never been so happy, and that is the most terrible thing in Greywater.',
+    escaped: 'Sister Agnes walked out of Greywater at dawn, praying aloud, and did not look back. The house still sings. She knows, because some nights she can hear it from the convent, carried across the water.',
     taken: 'The Greywater chapel has its congregation back, and a sister to lead them. She no longer doubts. That was the last thing the hymn took from her.',
   },
   juno: {
@@ -489,11 +493,13 @@ const EPILOGUE = {
     lost: 'Juno Reyes’s camera was found on the hall floor with one exposed plate. The others had it developed: it shows the four of them, mid-stride, alive — the last picture she ever took, and the proof that they got out.',
     fell: 'Juno Reyes died with the story unwritten. Her camera was never found. Her editor held the front page for two days, then ran a paragraph on page eleven: photographer missing, lake district. Nobody went to look.',
     takenMad: 'Juno kept taking pictures long after the plates ran out. She is taking them now, raising the empty camera to her eye in the dark, pressing the shutter, winding on. She says the pictures are wonderful. She says we are all in them.',
+    escaped: 'Juno ran, and kept running, and when she stopped there was a road, and a dawn, and no story anyone would print. The house is still out there. She has the photographs to prove it — if she ever dares develop them.',
     taken: 'Juno’s last photograph hangs in the Greywater day room. It shows the patients in rows, singing, and at the end of the back row a woman in a cloche hat, mouth open, holding a camera she will never lower.',
   },
 };
 function epilogueFor(S, v) {
   const E = EPILOGUE[v.id]; if (!E) return '';
+  if (S.phase !== 'won' && !v.out && S.opt && S.opt.legacy) return E.escaped;   // legacy: the campaign goes on, so the survivors get out
   if (S.phase !== 'won') return v.out ? E.fell : v.insane ? E.takenMad : E.taken;
   return v.out ? E.lost : v.insane ? E.insane : v.wounded ? E.wounded : E.fine;
 }

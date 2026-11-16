@@ -214,6 +214,30 @@ const DIFF = {
   std: {n: 'Standard', sub: 'The intended experience. About half of all groups escape.'},
   hard: {n: 'Hard', clock: -3, grace: 0, mon: 1, sub: 'A shorter night, more monsters, and no extra round when someone falls. About 1 in 3 escape.'},
 };
+// legacy mode: what each investigator brings from earlier scenarios (see casebook.js)
+const TALENTS = {
+  steady: {n: 'Steady Nerve', t: 'Once per scenario, ignore 1 Horror.'},
+  tough: {n: 'Hard to Kill', t: 'Once per scenario, ignore 1 Damage.'},
+  lucky: {n: 'Old Habits', t: 'Start each scenario with 1 extra Clue.'},
+  canny: {n: 'Knows the Signs', t: 'Start each scenario with 1 extra Clue and see the first Mythos coming (+1 Will on the first test).'},
+};
+const SCAR_FROM = {ankle: 'agi', gash: 'str', concussion: 'obs', tinnitus: 'obs', shaking: 'agi', nightmares: 'will', paranoia: 'inf'};
+const SCAR_NAME = {ankle: 'Old Sprain', gash: 'Old Scar', concussion: 'Lingering Headaches', tinnitus: 'Faint Ringing', shaking: 'Unsteady Hands', nightmares: 'Bad Dreams', paranoia: 'Wary Eyes'};
+function applyLegacy(S, lgs) {
+  const lines = [];
+  for (const v of S.inv) {
+    const L = lgs[v.id]; if (!L) continue;
+    v.lg = {sk: L.sk || {}, hp: L.hp || 0, san: L.san || 0, talents: L.talents || [], scars: L.scars || [], haunted: !!L.haunted, vet: L.vet || 0};
+    (L.keep || []).forEach(k => { if (k.startsWith('spell:')) { const sp = k.slice(6); if (!v.spells.includes(sp)) v.spells.push(sp); } else if (ITEMS[k] && !v.items.includes(k)) v.items.push(k); });
+    if (L.bequest && ITEMS[L.bequest.item] && !v.items.includes(L.bequest.item)) { v.items.push(L.bequest.item); lines.push(`${nm(v)} carries ${ITEMS[L.bequest.item].n}, left behind by ${L.bequest.from}.`); }
+    v.scarFresh = {}; v.lg.scars.forEach(sc => v.scarFresh[sc.sk] = true);
+    if (v.lg.haunted) v.hor.push('unease');
+    if (v.lg.talents.includes('lucky') || v.lg.talents.includes('canny')) v.clues += 1;
+    if (!v.lg.vet) { v.lg.fresh = 1; v.clues += 1; }
+    if (L.line) lines.push(L.line);
+  }
+  if (lines.length) S.lgIntro = lines.join('\n\n');
+}
 function newGame(picks, opt = {}) {
   const df = DIFF[opt.diff] || {};
   const clock = (CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax) + (df.clock || 0);
@@ -242,8 +266,10 @@ function newGame(picks, opt = {}) {
     decks: {dmg: shuffle(DMG_DECK), hor: shuffle(HOR_DECK)}, noise: null, lastRound: 0, pendingBoss: null,
     mythosUsed: [], log: [], stories: [], storySeq: 0, rseq: 0, roll: null, result: null, revealed: {}, stats: {},
   };
+  if (opt.legacy) applyLegacy(S, opt.legacy);
   revealRoom(S, 'hall', null);
   story(S, 'The Greywater Choir', 'Autumn, 1926. A letter from Dr. Hollis Marrow, director of Greywater Sanatorium, reached each of you on the same morning: “Come quickly. The patients have begun to sing.”\n\nYou arrive at dusk. The building on the black lake is silent. The front doors close behind you — and lock.\n\nFind out what happened at Greywater.', 'intro');
+  if (S.lgIntro) { story(S, 'Old wounds, old friends', S.lgIntro, 'story'); delete S.lgIntro; }
   log(S, 'Round 1. Find out what happened at Greywater.', 'round');
   return S;
 }
@@ -254,6 +280,9 @@ function say(S, L, t, k) { log(S, t, k); if (L) L.push({t, k}); }
 const nm = inv => INVD(inv.id).name;
 const stat = (S, id, key, n = 1) => { if (!id) return; S.stats = S.stats || {}; const t = S.stats[id] = S.stats[id] || {}; t[key] = (t[key] || 0) + n; };
 const monHp = m => m.hp || MONSTERS[m.type].hp;
+// legacy: an investigator's health and sanity include what they carried over from earlier scenarios
+const maxHp = v => INVD(v.id).hp + ((v.lg && v.lg.hp) || 0);
+const maxSan = v => INVD(v.id).san + ((v.lg && v.lg.san) || 0);
 const first = inv => INVD(inv.id).name.split(' ').slice(-1)[0] === 'Agnes' ? 'Agnes' : INVD(inv.id).name.split(' ')[0];
 const activeInv = S => S.inv.filter(i => !i.out);
 const invAt = (S, sp) => S.inv.filter(i => !i.out && i.space === sp);
@@ -267,6 +296,7 @@ function skillVal(S, inv, sk) {
   for (const c of inv.dmg) { const C = DMG_CARDS[c]; if (C.up && C.mod && C.mod[sk]) v += C.mod[sk]; }
   for (const c of inv.hor) { const C = HOR_CARDS[c]; if (C.up && C.mod && C.mod[sk]) v += C.mod[sk]; }
   for (const k of inv.items) { const I = ITEMS[k]; if (I && I.mod && I.mod[sk]) v += I.mod[sk]; }
+  if (inv.lg) { v += (inv.lg.sk && inv.lg.sk[sk]) || 0; if (inv.scarFresh && inv.scarFresh[sk]) v -= 1; }
   return Math.max(1, v);
 }
 const hasFlag = (inv, f) => inv.hor.some(c => HOR_CARDS[c].up && HOR_CARDS[c].flag === f) || inv.dmg.some(c => DMG_CARDS[c].up && DMG_CARDS[c].flag === f);
@@ -278,6 +308,7 @@ const inDark = (S, inv) => !!S.dark[inv.space] && !lit(S, inv.space);
 
 function autoTest(S, inv, sk, bonus = 0) {
   const n = Math.max(1, skillVal(S, inv, sk) + bonus);
+  if (inv.scarFresh) delete inv.scarFresh[sk];
   let f = Array.from({length: n}, () => rollFace(S));
   if (sk === 'lore' && inv.id === 'elias') f = f.map(x => x === 'B' ? rollFace(S) : x);
   return f.filter(x => x === 'S' || (x === 'C' && sk === 'obs' && inv.id === 'juno')).length;
@@ -288,6 +319,12 @@ function draw(S, kind) {
   const d = S.decks[kind];
   if (!d.length) S.decks[kind] = shuffle(kind === 'dmg' ? DMG_DECK : HOR_DECK);
   return S.decks[kind].pop();
+}
+// legacy talents that work once per scenario
+function talentOnce(inv, t) {
+  if (!inv.lg || !(inv.lg.talents || []).includes(t)) return false;
+  inv.used = inv.used || {}; if (inv.used[t]) return false;
+  inv.used[t] = true; return true;
 }
 function hurt(S, inv, n, why, L) {
   if (inv.out || n <= 0) return;
@@ -300,6 +337,7 @@ function hurt(S, inv, n, why, L) {
   }
   if (n >= CONFIG.lampDropAt && inv.items.includes('oillamp')) { inv.items.splice(inv.items.indexOf('oillamp'), 1); say(S, L, `${nm(inv)} drops the Oil Lamp. It shatters.`, 'bad'); setFire(S, inv.space, L); }
   if (n <= 0) return;
+  if (talentOnce(inv, 'tough')) { n -= 1; say(S, L, `${nm(inv)} shrugs it off — Hard to Kill (1 Damage ignored).`, 'good'); if (n <= 0) return; }
   const got = [];
   for (let k = 0; k < n; k++) { const c = draw(S, 'dmg'); inv.dmg.push(c); if (DMG_CARDS[c].up) got.push(DMG_CARDS[c].n); }
   stat(S, inv.id, 'dmg', n);
@@ -309,6 +347,7 @@ function hurt(S, inv, n, why, L) {
 function scare(S, inv, n, why, L) {
   if (inv.out || n <= 0) return;
   if (inv.id === 'agnes') { n -= 1; if (n <= 0) { say(S, L, `${nm(inv)}'s faith holds${why ? ' against ' + why : ''}.`); return; } }
+  if (n > 0 && talentOnce(inv, 'steady')) { n -= 1; say(S, L, `${nm(inv)}'s Steady Nerve holds (1 Horror ignored).`, 'good'); if (n <= 0) return; }
   const got = [];
   for (let k = 0; k < n; k++) { const c = draw(S, 'hor'); inv.hor.push(c); if (HOR_CARDS[c].up) got.push(HOR_CARDS[c].n); }
   stat(S, inv.id, 'hor', n);
@@ -324,19 +363,19 @@ function discardDown(inv, kind, n) {
 function status(S, inv, L) {
   if (inv.out) return;
   const d = INVD(inv.id);
-  if (inv.dmg.length >= d.hp) {
+  if (inv.dmg.length >= maxHp(inv)) {
     if (!inv.wounded) {
       inv.wounded = true; discardDown(inv, 'dmg', 99);
       say(S, L, `${nm(inv)} is Wounded. They can make only one Move action each round now.`, 'dire');
-      if (inv.dmg.length >= d.hp) return eliminate(S, inv, 'their wounds', L);
+      if (inv.dmg.length >= maxHp(inv)) return eliminate(S, inv, 'their wounds', L);
     } else return eliminate(S, inv, 'their wounds', L);
   }
-  if (inv.hor.length >= d.san) {
+  if (inv.hor.length >= maxSan(inv)) {
     if (!inv.insane) {
       inv.insane = true; discardDown(inv, 'hor', 99);
       say(S, L, `${nm(inv)} has gone Insane and drawn a secret insanity card. Only their player may read it.`, 'dire');
       story(S, `${nm(inv)} goes insane`, `Something in ${first(inv)}'s eyes has changed. They have drawn an insanity card — only their player knows what it says.`, 'insane');
-      if (inv.hor.length >= d.san) return eliminate(S, inv, 'madness', L);
+      if (inv.hor.length >= maxSan(inv)) return eliminate(S, inv, 'madness', L);
     } else return eliminate(S, inv, 'madness', L);
   }
 }

@@ -113,6 +113,7 @@ function hostHandle(conn, msg) {
   if (msg.t === 'picks' && G.lobby && !G.S) {
     const s = G.lobby.seats.find(x => x.uid === pid); if (!s) return;
     s.picks = (Array.isArray(msg.picks) ? msg.picks : []).filter(id => INVD(id)).slice(0, 4);
+    s.lg = msg.lg && typeof msg.lg === 'object' ? msg.lg : null;
     broadcast({t: 'lobby', L: G.lobby}); render();
   } else if (msg.t === 'commit' && G.S) {
     const S = msg.S;
@@ -204,10 +205,10 @@ function toggleSeatPick(id) {
   const c = claims();
   let picks = (mine.picks || []).slice();
   if (picks.includes(id)) picks = picks.filter(x => x !== id);
-  else { if (c[id] && c[id] !== G.me) return; if (Object.keys(c).length >= 4) { toast('Four investigators is the most the house will take.'); return; } picks.push(id); }
+  else { if (c[id] && c[id] !== G.me) return; if (G.lobby.legacy && Casebook.retired(id)) { toast(`${INVD(id).name} is retired in your casebook.`); return; } if (Object.keys(c).length >= 4) { toast('Four investigators is the most the house will take.'); return; } picks.push(id); }
   mine.picks = picks;
   if (G.net.role === 'host') broadcast({t: 'lobby', L: G.lobby});
-  else if (!send(G.net.conn, {t: 'picks', picks})) toast('Not connected to the host right now.');
+  else if (!send(G.net.conn, {t: 'picks', picks, lg: legacyFor(picks, true)})) toast('Not connected to the host right now.');
   render();
 }
 function beginOnline() {
@@ -215,7 +216,13 @@ function beginOnline() {
   const c = claims();
   const order = INVESTIGATORS.map(d => d.id).filter(id => c[id]);
   if (order.length < 2) { toast('Choose at least 2 investigators.'); return; }
-  const S = newGame(order.map(id => ({id, owner: c[id]})), {dir: SET.director, pity: SET.pity, diff: G.lobby.diff || 'std'});
+  let legacy = null;
+  if (G.lobby.legacy) {
+    legacy = {};
+    const mine = order.filter(id => c[id] === G.me), own = legacyFor(mine);
+    for (const id of order) legacy[id] = c[id] === G.me ? own[id] : ((G.lobby.seats.find(s => s.uid === c[id]) || {}).lg || {})[id] || {};
+  }
+  const S = newGame(order.map(id => ({id, owner: c[id]})), {dir: SET.director, pity: SET.pity, diff: G.lobby.diff || 'std', legacy});
   Object.assign(S, {code: G.code, host: G.me, created: G.lobby.created, mode: 'online',
     players: [...new Set([G.me, ...order.map(id => c[id])])], names: Object.fromEntries(G.lobby.seats.map(s => [s.uid, s.name]))});
   hostAccept(S);
