@@ -5,7 +5,7 @@
    In the wide middle band it does nothing at all. Skill and target numbers of tests are never changed.
    Bad-luck protection is separate: failing the same check again and again makes each die a bit kinder, and the
    3rd-5th attempt in a row (picked at random) is a guaranteed pass. */
-const DIRECTOR = {cap: 0.10, dead: 0.4, span: 0.5, center: -0.2, pityStep: 0.10, pityMax: 0.30,
+const DIRECTOR = {cap: 0.10, dead: 0.4, span: 0.5, center: -0.2, pityStep: 0.10, pityMax: 0.30, pityMinChance: 0.2,
   tone: {bell: 1, footsteps: 1, hymn: 1, seep: 1, lights: 1, whisper: 1, breath: -1, quiet: -1}};
 
 function dirProgress(S) {
@@ -40,6 +40,12 @@ function pityBonus(S, inv, key) {
   if (!key || (S.opt && S.opt.pity === false)) return 0;
   return Math.min(DIRECTOR.pityMax, DIRECTOR.pityStep * ((inv.pity || {})[key] || 0));
 }
+// chance of at least `need` successes on n honest dice (3 in 8 each)
+function passChance(n, need) {
+  const p = 0.375; let c = 1, miss = 0;
+  for (let k = 0; k < need && k <= n; k++) { miss += c * Math.pow(p, k) * Math.pow(1 - p, n - k); c = c * (n - k) / (k + 1); }
+  return need > n ? 0 : 1 - miss;
+}
 function pityMark(inv, key, ok) {
   if (!key) return;
   inv.pity = inv.pity || {}; inv.pityAt = inv.pityAt || {};
@@ -52,6 +58,8 @@ function pityForce(S, inv, key, faces, need, counts) {
   if (!key || (S.opt && S.opt.pity === false)) return false;
   const at = (inv.pityAt || {})[key];
   if (!at || ((inv.pity || {})[key] || 0) + 1 < at) return false;
+  // Not for long shots: if this investigator would pass less than 1 time in 5 on honest dice, repeating the attempt earns nothing.
+  if (passChance(faces.length, need || 1) < DIRECTOR.pityMinChance) return false;
   const want = Math.min(faces.length, need || 1);
   let have = faces.filter(counts).length, changed = false;
   for (let i = 0; i < faces.length && have < want; i++) if (!counts(faces[i])) { faces[i] = 'S'; have++; changed = true; }
