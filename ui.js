@@ -9,7 +9,7 @@ const app = $('#app');
 const CELL = 140;
 // art that has been dropped in (art/rooms/<id>.webp); everything else uses placeholder floors
 const PCLIP = '<clipPath id="pclip" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath>';
-const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara', 'elias', 'dex', 'agnes', 'juno'], monsters: ['orderly', 'drowned', 'choir', 'marrow'], events: ['settles', 'sing', 'swells']};
+const ART = {rooms: ['corr', 'hall', 'day', 'nurse', 'office', 'ward', 'chapel', 'stair', 'morgue', 'boiler', 'hydro'], portraits: ['mara', 'elias', 'dex', 'agnes', 'juno'], monsters: ['orderly', 'drowned', 'choir', 'marrow'], events: ['settles', 'sing', 'swells', 'radiators']};
 
 const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], seats: [], lobby: null, net: null, netText: '',
   busy: false, seenStory: null, seenR: null, myRolls: new Set(), localPicks: [], vb: null, fitKey: '', moveMode: false, sheet: null,
