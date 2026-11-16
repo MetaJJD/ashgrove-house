@@ -10,7 +10,7 @@ const CONFIG = {
   clueStart: 1,
   evidenceNeeded: 3,
   threatMax: 14,         // hidden clock: lose when it reaches this (overridden per player count below)
-  threatByPlayers: {2: 29, 3: 19, 4: 18},  // tuned by simulation for ~45–50% wins
+  threatByPlayers: {2: 26, 3: 18, 4: 18},  // tuned by simulation for ~45–50% wins
   evLive: 4,             // how many of the 5 evidence sources hold evidence this game
   jamNeed: 1,            // successes to force the jammed stairwell door
   graceRounds: 1,          // extra rounds the survivors get after the first investigator falls
@@ -261,8 +261,8 @@ const inDark = (S, inv) => !!S.dark[inv.space] && !lit(S, inv.space);
 
 function autoTest(S, inv, sk, bonus = 0) {
   const n = Math.max(1, skillVal(S, inv, sk) + bonus);
-  let f = Array.from({length: n}, rollD8);
-  if (sk === 'lore' && inv.id === 'elias') f = f.map(x => x === 'B' ? rollD8() : x);
+  let f = Array.from({length: n}, () => rollFace(S));
+  if (sk === 'lore' && inv.id === 'elias') f = f.map(x => x === 'B' ? rollFace(S) : x);
   return f.filter(x => x === 'S' || (x === 'C' && sk === 'obs' && inv.id === 'juno')).length;
 }
 
@@ -374,7 +374,12 @@ function exploreTargets(S) {
 
 // ------------------------------------------------------------ monsters
 function spawn(S, type, sp) {
-  if (S.monsters.filter(m => !MONSTERS[m.type].boss).length >= (S.maxMon || CONFIG.maxMonsters) && !MONSTERS[type].boss) return 'Something moves inside the walls, but does not come out — yet.';
+  const held = 'Something moves inside the walls, but does not come out — yet.';
+  const full = S.monsters.filter(m => !MONSTERS[m.type].boss).length >= (S.maxMon || CONFIG.maxMonsters) && !MONSTERS[type].boss;
+  // Director (random Mythos events only): may hold a spawn back when things are dire, or let one past the cap when they are easy
+  const lean = S.dirEv && !sp ? dirMood(S) : 0;
+  if (full && !(lean < 0 && Math.random() < DIRECTOR.cap * -lean)) return held;
+  if (lean > 0 && Math.random() < DIRECTOR.cap * lean) return held;
   if (!sp) {
     const cand = Object.keys(SP).filter(s => revealed(S, s));
     const dist = distFromInvestigators(S);
@@ -531,15 +536,16 @@ function mythosPhase(S) {
     S.step = 'inv'; return;
   }
   S.threat++;
+  dirUpdate(S);
   const bi = beatsOf(S).indexOf(S.threat), beat = BEATS[bi];
   let title, flavor, img;
   if (beat) { title = beat.t; flavor = beat.f; img = beat.id; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && bi > 0) evidenceHint(S, L); }
   else {
     const scale = (S.threatMax || 15) / 15;
     const opts = MYTHOS.filter(m => (!m.min || S.threat >= Math.round(m.min * scale)) && !S.mythosUsed.slice(-4).includes(m.id));
-    const ev = pick(opts);
+    const ev = dirPickEvent(S, opts);
     S.mythosUsed.push(ev.id);
-    title = ev.t; flavor = ev.f; img = ev.id; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); ev.fx(S, L);
+    title = ev.t; flavor = ev.f; img = ev.id; log(S, `Mythos: ${ev.t}. ${ev.f}`, 'myth'); S.dirEv = true; ev.fx(S, L); S.dirEv = false;
   }
   if (S.phase === 'play') spreadFire(S, L);
   const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };

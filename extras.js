@@ -97,7 +97,7 @@ function setFlood(D, s, L) {
 }
 function spreadFire(D, L) {
   const fires = Object.keys(D.fire || {});
-  if (!fires.length || Math.random() >= CONFIG.fireSpread) return;
+  if (!fires.length || Math.random() >= CONFIG.fireSpread * (1 - DIRECTOR.cap * dirMood(D))) return;
   if (CONFIG.fireCap && fires.length >= CONFIG.fireCap) return;
   const opts = [];
   for (const f of fires) for (const a of ADJ[f]) if (passable(D, a.link) && !fireAt(D, a.to)) opts.push(a.to);

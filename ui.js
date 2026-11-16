@@ -16,7 +16,7 @@ const G = {screen: 'home', mode: null, S: null, me: null, code: null, subs: [], 
   drawer: false, storyQ: [], showingStory: false, secretsShown: {}, undo: null, tour: null, camAnim: 0};
 
 // ------------------------------------------------------------ settings
-const SET_DEF = {text: 'm', fast: false, shake: true, follow: true, warnEnd: true, alert: true};
+const SET_DEF = {text: 'm', fast: false, shake: true, follow: true, warnEnd: true, alert: true, director: true, pity: true};
 const SET = Object.assign({}, SET_DEF, (() => { try { return JSON.parse(localStorage.getItem('gw-settings') || '{}'); } catch (e) { return {}; } })());
 function applySettings() {
   const c = document.body.classList;
@@ -32,6 +32,9 @@ function showSettings() {
     ${row('alert', 'Your-turn alert', 'A chime and a buzz when it is your turn (online games)')}
     ${row('fast', 'Faster dice and pop-ups', 'Shorter dice rolls and animations')}
     ${row('shake', 'Screen shake', 'The jolt when the Mythos phase begins')}
+    <div class="eyebrow" style="margin-top:14px">New games (the host's choice online)</div>
+    ${row('director', 'The Director', 'Quietly eases off when things are dire and presses when they are too easy — never by more than 10%')}
+    ${row('pity', 'Bad-luck protection', 'Failing the same check repeatedly makes the next try more likely to pass; the 3rd to 5th try in a row always does')}
     <div class="btns"><button class="primary" data-x="ok">Done</button></div>`, 'settings');
   m.addEventListener('click', e => {
     const t = e.target.closest('[data-text]');
@@ -530,11 +533,13 @@ function rollToast(r) {
 // dice
 function rollTest(D, inv, sk, o = {}) {
   const n = Math.max(1, skillVal(D, inv, sk) + (o.bonus || 0));
-  let faces = Array.from({length: n}, rollD8);
+  const pkey = o.label || sk, luck = pityBonus(D, inv, pkey);
+  let faces = Array.from({length: n}, () => rollFace(D, luck));
   let rerolled = false;
-  if (sk === 'lore' && inv.id === 'elias' && faces.includes('B')) { faces = faces.map(f => f === 'B' ? rollD8() : f); rerolled = true; }
+  if (sk === 'lore' && inv.id === 'elias' && faces.includes('B')) { faces = faces.map(f => f === 'B' ? rollFace(D, luck) : f); rerolled = true; }
   const keen = sk === 'obs' && inv.id === 'juno';
   const dark = inDark(D, inv);
+  const forced = pityForce(D, inv, pkey, faces, o.need, f => f === 'S' || (f === 'C' && keen));
   return new Promise(resolve => {
     let spent = 0;
     const d = INVD(inv.id);
@@ -553,6 +558,7 @@ function rollTest(D, inv, sk, o = {}) {
       diceEl.innerHTML = faces.map(f => `<div class="die ${f}${f === 'C' && keen ? ' K' : ''}">${FACE[f]}</div>`).join('');
       const s = succ(), notes = [];
       if (rerolled) notes.push('Erudite: blanks rerolled once.');
+      if (forced) notes.push('Persistence pays off.');
       if (keen) notes.push('Keen Eye: 🔍 counts as a success.');
       if (dark && faces.includes('C') && !keen) notes.push('Darkness: you cannot spend Clues here.');
       $('#dsum', m).innerHTML = `${s} success${s === 1 ? '' : 'es'}${o.need ? (s >= o.need ? ' — <span class="pass">passed</span>' : ' — <span class="fail">failed</span>') : ''}${notes.length ? `<br><small>${notes.join(' ')}</small>` : ''}<span class="dout">${esc(afterLine())}</span>`;
@@ -568,6 +574,7 @@ function rollTest(D, inv, sk, o = {}) {
         m.remove();
         inv.clues -= spent;
         const s = succ();
+        pityMark(inv, pkey, o.need ? s >= o.need : s > 0);
         D.rseq = (D.rseq || 0) + 1;
         D.roll = {seq: D.rseq, who: inv.id, label: o.label || SKILL_NAMES[sk], faces: faces.slice(), succ: s, flav: after ? after.t : ''};
         G.myRolls.add(D.rseq);
@@ -847,6 +854,7 @@ function showRules() {
     <h3>Evading</h3><p>If a monster is in your space, you must pass an evade test before any action except Attack. Fail and the action is lost — and it hits you.</p>
     <h3>Tests</h3><p>Roll one die per point of skill: ✦ is a success, 🔍 can be turned into a success by spending a Clue (not in Darkness), blank is nothing.</p>
     <h3>Same rules for everyone</h3><p>Each action always tests the same skill against the same target, whoever attempts it — forcing the jammed door is Strength, need 1, for all. Only the number of dice differs, because it comes from that investigator's skill. The text describing the attempt changes with each character's background; it is flavour and never changes the result.</p>
+    <h3>Luck and the Director</h3><p><b>Bad-luck protection:</b> each time you fail the same check in a row, your dice get a little kinder, and the 3rd, 4th or 5th try in a row is a guaranteed pass. <b>The Director:</b> when the team is in real trouble, or cruising, dice luck, Mythos events, spawns and fire lean by at most 10% the other way. Both can be switched off in Settings for new games.</p>
     <h3>Damage & Horror</h3><p>Taken as cards; some stay face up with lasting effects. When Damage reaches Health you are <b>Wounded</b> (one Move action per round); when Horror reaches Sanity you go <b>Insane</b> and draw a secret card. The second time either happens, you are eliminated — and the rest of you have until the end of the next round to win.</p>
     <h3>Spells</h3><p>You see a spell’s front; its back stays hidden until you cast it, then you resolve the back — a bonus or a price — and gain a fresh copy with a new hidden back. Anyone can cast; Lore helps.</p>
     <h3>Puzzles</h3><p>Some ❗ tokens are puzzles. You get steps equal to the skill shown (+1 per Clue, not in Darkness). Stop any time — progress is kept, and anyone can carry on later.</p>
@@ -868,7 +876,7 @@ document.addEventListener('click', async e => {
     case 'install': showInstall(); break;
     case 'setup': G.localPicks = []; G.screen = 'setup'; render(); break;
     case 'lpick': { const i = G.localPicks.indexOf(b.dataset.id); if (i >= 0) G.localPicks.splice(i, 1); else if (G.localPicks.length < 4) G.localPicks.push(b.dataset.id); render(); break; }
-    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'}))); N.mode = 'local'; saveLocal(N); onState(N); break; }
+    case 'lbegin': { clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'}))); N.mode = 'local'; N.opt = {dir: SET.director, pity: SET.pity}; saveLocal(N); onState(N); break; }
     case 'resume': { const L = loadLocal(); if (L) { clearSubs(); G.mode = 'local'; G.seenStory = L.storySeq; G.seenR = L.rseq; G.S = null; app.innerHTML = ''; onState(L); } break; }
     case 'host': hostGame(); break;
     case 'rehost': { const h = loadHost(); if (h) hostGame(h); break; }
