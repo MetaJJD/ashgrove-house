@@ -10,13 +10,13 @@ const CONFIG = {
   clueStart: 1,
   evidenceNeeded: 3,
   threatMax: 14,         // hidden clock: lose when it reaches this (overridden per player count below)
-  threatByPlayers: {2: 23, 3: 17, 4: 15},  // tuned by simulation for ~35–42% wins
+  threatByPlayers: {2: 24, 3: 17, 4: 15},  // tuned by simulation for ~35–42% wins
   evLive: 4,             // how many of the 5 evidence sources hold evidence this game
   jamNeed: 1,            // successes to force the jammed stairwell door
   fireSpread: 0.4,         // chance fire spreads each Mythos phase
   fireCap: 3,              // most spaces that can burn at once (0 = no limit)
   lateBurst: true,         // boiler bursts even if unexplored: the fire is waiting when you open the Boiler Room
-  noiseSummon: false,      // noise with no Orderly on the board calls one out of the walls
+  noiseSummon: 'once',     // noise with no Orderly on the board calls one out of the walls: false | 'once' (per game) | true
   lampDropAt: 3,         // damage in one hit that makes a held Oil Lamp drop and start a fire
   beats: [4, 8, 12],     // story escalations
   engineNeed: 5,         // goal A: Strength successes to silence the Engine
@@ -539,7 +539,7 @@ function mythosPhase(S) {
   }
   if (S.phase === 'play') spreadFire(S, L);
   const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };
-  if (S.phase === 'play' && CONFIG.noiseSummon && S.noise && !S.monsters.some(m => m.type === 'orderly')) { const who = S.inv.find(i => i.id === S.noise); if (who && !who.out) say(S, L, `The noise ${nm(who)} made has been heard. ` + spawn(S, 'orderly'), 'bad'); }
+  if (S.phase === 'play' && CONFIG.noiseSummon && !(CONFIG.noiseSummon === 'once' && S.noiseSummoned) && S.noise && !S.monsters.some(m => m.type === 'orderly')) { const who = S.inv.find(i => i.id === S.noise); if (who && !who.out) { S.noiseSummoned = true; say(S, L, `Something heard the noise ${nm(who)} made. ` + spawn(S, 'orderly'), 'bad'); } }
   if (S.phase === 'play') section('— The monsters move —', activateMonsters);
   if (S.phase === 'play') section('— Horror checks —', horrorChecks);
   if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
