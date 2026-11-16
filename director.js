@@ -8,14 +8,7 @@
 const DIRECTOR = {cap: 0.10, dead: 0.4, span: 0.5, center: -0.2, pityStep: 0.10, pityMax: 0.30, pityMinChance: 0.2,
   tone: {bell: 1, footsteps: 1, hymn: 1, seep: 1, lights: 1, whisper: 1, breath: -1, quiet: -1}};
 
-function dirProgress(S) {
-  if (!S.goal) return 0.5 * Math.min(1, S.evidence.length / CONFIG.evidenceNeeded);
-  if (S.goal === 'C') { const b = S.monsters.find(m => m.type === 'marrow'); return b ? 0.5 + 0.45 * b.wounds / monHp(b) : 0.5; }
-  if (S.goal === 'A') { const h = S.inv.find(v => !v.out && v.items.includes('valve')); return !h ? 0.5 : roomOf(h.space) === 'hydro' ? 0.85 : 0.7; }
-  const a = S.ada; if (!a || !a.found) return 0.5;
-  if (!a.escort) return 0.6;
-  return roomOf(a.space) === 'hall' ? 0.9 : 0.75;
-}
+function dirProgress(S) { return SCN && SCN.progress ? SCN.progress(S) : 0.5; }
 function dirPressure(S) {
   const all = S.inv, alive = all.filter(v => !v.out);
   if (!alive.length) return 0;

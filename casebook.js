@@ -33,6 +33,9 @@ function legacyFor(ids, dry = false) {
       if (bi >= 0) { L.bequest = c.bequests[bi]; if (!dry) c.bequests.splice(bi, 1); changed = true; }
     }
     L.line = memoryLine(id, r);
+    // how this investigator's last case in each scenario ended (later chapters open differently)
+    L.prev = {};
+    for (const p of r.plays) L.prev[p.sc] = {result: p.result, goal: p.goal, partial: !!p.partial};
     out[id] = L;
   }
   if (changed && !dry) Casebook.save(c);
@@ -54,12 +57,15 @@ function memoryLine(id, r) {
     fine: `${n} has walked out of a place like this ${times}, and walks in now with the calm of someone who knows it can be done.`,
     wounded: `${n} still feels the last time in ${P.their} body — a stiffness on cold mornings. ${P.They} came anyway.`,
     insane: `${n} smiles a little too easily these days, and hums when ${P.they} thinks no one is listening.`,
-    escaped: `${n} got out of Greywater when no one else thought it possible. ${P.They} does not talk about how.`,
+    escaped: `${n} got out of ${(SCENARIOS[last.sc] || SCN).place || 'that place'} when no one else thought it possible. ${P.They} does not talk about how.`,
   };
   let t = bits[last.fate] || bits.fine;
   if (r.mem.includes('conductor')) t += ` ${P.They} has looked Dr. Marrow in the eye.`;
   else if (r.mem.includes('ada')) t += ` Some nights ${P.they} still hears Ada Wren’s voice.`;
   else if (r.mem.includes('engine')) t += ' The note of the Engine has never quite left their ears.'.replace('their', P.their);
+  if (r.mem.includes('children')) t += ` ${P.They} still dreams about two children on a rock.`;
+  else if (r.mem.includes('lamplighter')) t += ` ${P.They} has seen a man with a lantern for an eye.`;
+  else if (r.mem.includes('lamp')) t += ` Green light makes ${P.their} hands shake.`;
   if (r.mem.includes('lostfriend')) t += ` ${P.They} has buried a friend.`;
   return t;
 }
@@ -75,7 +81,7 @@ function rewardOptions(S, v, r) {
   if (keepable.length) { const k = pick(keepable); opts.push({k: 'keep', item: k, t: `Keep ${k.startsWith('spell:') ? SPELLS[k.slice(6)].n : ITEMS[k].n}`, d: 'Start every future scenario with it.'}); }
   const tal = Object.keys(TALENTS).filter(t => !r.talents.includes(t));
   if (tal.length) { const t = S.goal === 'C' && tal.includes('steady') ? 'steady' : pick(tal); opts.push({k: 'talent', tal: t, t: TALENTS[t].n, d: TALENTS[t].t}); }
-  let pickN = won ? 3 : 2;
+  let pickN = won && !S.partial ? 3 : 2;
   const res = shuffle(opts).slice(0, pickN);
   if (r.scars.length || r.haunted) res.push({k: 'heal', t: 'Heal instead', d: r.scars.length ? `Lose the scar “${r.scars[0].n}”.` : 'No longer Haunted.'});
   return res;
@@ -97,12 +103,13 @@ async function legacyEnd(S) {
   const anyFell = S.inv.some(v => v.out);
   for (const v of mine) {
     const r = Casebook.rec(c, v.id), fate = fateOf(S, v);
-    const mem = ['greywater'];
-    if (S.goal) mem.push({A: 'engine', B: 'ada', C: 'conductor'}[S.goal]);
+    const SC = SCENARIOS[S.sc] || SCN;
+    const mem = [S.sc];
+    if (S.goal) mem.push(SC.memory[S.goal]);
     if (v.insane) mem.push('insane');
     if (anyFell && !v.out) mem.push('lostfriend');
     mem.forEach(m => { if (!r.mem.includes(m)) r.mem.push(m); });
-    r.plays.push({sc: 'greywater', date: Date.now(), result: S.phase, fate, goal: S.goal || null, diff: (S.opt || {}).diff || 'std', rounds: S.round, epi: epilogueFor(S, v)});
+    r.plays.push({sc: S.sc, partial: !!S.partial, date: Date.now(), result: S.phase, fate, goal: S.goal || null, diff: (S.opt || {}).diff || 'std', rounds: S.round, epi: epilogueFor(S, v)});
     if (v.out) {
       r.retired = true;
       const left = v.items.find(k => ITEMS[k] && k !== 'valve') || INVD(v.id).start[0];
@@ -119,7 +126,7 @@ async function legacyEnd(S) {
     const c2 = Casebook.load(), r = c2.chars[v.id];
     const opts = rewardOptions(S, v, r);
     const choice = await new Promise(res => {
-      const m = openModal(`<div class="eyebrow">Casebook · ${S.phase === 'won' ? 'they made it' : 'they got out — barely'}</div>
+      const m = openModal(`<div class="eyebrow">Casebook · ${S.phase === 'won' ? (S.partial ? 'half a victory' : 'they made it') : 'they got out — barely'}</div>
         <div class="sh-head">${portraitSVG(v.id, 56)}<div><h2>${esc(INVD(v.id).name)}</h2><div class="role">Choose what they carry forward</div></div></div>
         <div class="list">${opts.map((o, i) => `<button data-o="${i}"><span><b>${esc(o.t)}</b><br><small>${esc(o.d)}</small></span></button>`).join('')}</div>
         ${r.scars.length || r.haunted ? `<p class="dim">Carries: ${[...r.scars.map(x => x.n), ...(r.haunted ? ['Haunted'] : [])].join(', ')}.</p>` : ''}`, 'story');

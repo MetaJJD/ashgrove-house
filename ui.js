@@ -127,6 +127,7 @@ function hatShapes(hat, cx, cy, r) {
     case 'specs': return `<circle cx="${cx - r * 0.13}" cy="${hy + r * 0.02}" r="${r * 0.1}" fill="none" stroke="#e8d9a8" stroke-width="${r * 0.04}"/><circle cx="${cx + r * 0.13}" cy="${hy + r * 0.02}" r="${r * 0.1}" fill="none" stroke="#e8d9a8" stroke-width="${r * 0.04}"/>`;
     case 'flatcap': return `<path d="M${cx - r * 0.36} ${hy - r * 0.1} Q${cx} ${hy - r * 0.62} ${cx + r * 0.36} ${hy - r * 0.1} L${cx + r * 0.46} ${hy - r * 0.06} L${cx - r * 0.36} ${hy - r * 0.04} Z" fill="#3a2a20"/>`;
     case 'veil': return `<path d="M${cx - r * 0.42} ${cy + r * 0.5} Q${cx - r * 0.5} ${hy - r * 0.55} ${cx} ${hy - r * 0.5} Q${cx + r * 0.5} ${hy - r * 0.55} ${cx + r * 0.42} ${cy + r * 0.5} L${cx + r * 0.28} ${cy + r * 0.5} Q${cx + r * 0.3} ${hy} ${cx} ${hy - r * 0.32} Q${cx - r * 0.3} ${hy} ${cx - r * 0.28} ${cy + r * 0.5} Z" fill="#14101c"/><rect x="${cx - r * 0.3}" y="${hy - r * 0.38}" width="${r * 0.6}" height="${r * 0.08}" fill="#f2efe6"/>`;
+    case 'souwester': return `<path d="M${cx - r * 0.5} ${hy - r * 0.02} Q${cx - r * 0.38} ${hy - r * 0.6} ${cx} ${hy - r * 0.58} Q${cx + r * 0.38} ${hy - r * 0.6} ${cx + r * 0.5} ${hy - r * 0.02} Q${cx} ${hy + r * 0.08} ${cx - r * 0.5} ${hy - r * 0.02} Z" fill="#d9b23a" stroke="#6a5212" stroke-width="${r * 0.03}"/>`;
     case 'cloche': return `<path d="M${cx - r * 0.42} ${hy - r * 0.02} Q${cx - r * 0.4} ${hy - r * 0.55} ${cx} ${hy - r * 0.55} Q${cx + r * 0.4} ${hy - r * 0.55} ${cx + r * 0.42} ${hy - r * 0.02} Z" fill="#5a2f3c"/><rect x="${cx - r * 0.38}" y="${hy - r * 0.16}" width="${r * 0.76}" height="${r * 0.07}" fill="#d9b84a"/>`;
   }
   return '';
@@ -167,7 +168,7 @@ function reachable(S) {
   if (S.moveLeft > 0) steps = S.moveLeft;
   if (S.actions > 0 && !(inv.wounded && inv.moveActs >= 1)) steps = Math.max(steps, CONFIG.moveSpaces);
   if (!steps) return {};
-  const {dist} = bfs(S, inv.space, {blockMon: true});
+  const {dist} = moveDist(S, inv);
   const out = {};
   for (const [s, d] of Object.entries(dist)) if (d > 0 && d <= steps) out[s] = d;
   return out;
@@ -198,9 +199,12 @@ function boardSVG(S) {
     for (const sid of Object.keys(R.sp)) {
       const s = SP[sid], sx = s.x * CELL, sy = s.y * CELL, sw = s.w * CELL, sh = s.h * CELL;
       const cls = ['space', reach[sid] ? 'reach' : '', act && act.space === sid && canAct() ? 'here' : ''].join(' ');
+      const wd = waterAt(S, sid);
+      if (wd >= 1 && !(S.flood && S.flood[sid])) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="${wd >= 2 ? '#123c66' : '#2a6496'}" opacity="${wd >= 2 ? 0.66 : 0.36}"/>${Array.from({length: Math.max(1, s.h * 2)}, (_, k) => `<path d="M${sx + 14} ${sy + 40 + k * 60} q15 -9 30 0 t30 0 t30 0" fill="none" stroke="#b9dcf7" stroke-width="3" opacity="${wd >= 2 ? 0.8 : 0.5}"/>`).join('')}${wd >= 2 ? `<text x="${sx + sw - 14}" y="${sy + sh - 14}" text-anchor="end" font-size="20" fill="#cfe6fa" opacity=".85">submerged</text>` : ''}`;
       if (S.flood && S.flood[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#1f4f7a" opacity="0.42"/>${Array.from({length: Math.max(1, s.h * 2)}, (_, k) => `<path d="M${sx + 14} ${sy + 40 + k * 60} q15 -9 30 0 t30 0 t30 0" fill="none" stroke="#9cc4ee" stroke-width="3" opacity="0.7"/>`).join('')}`;
       if (S.fire && S.fire[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="url(#firegrad)" opacity="0.6" class="fireov"/><path class="flame" d="M${sx + 30} ${sy + sh - 14} c-14 -12 -10 -26 0 -40 c2 12 10 14 12 6 c8 14 6 26 -12 34 z" fill="#ffb347" stroke="#7a2a08" stroke-width="2"/>`;
-      if (S.dark[sid]) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#000" opacity="${lit(S, sid) ? 0.2 : 0.62}"/><g opacity="0.85"><circle cx="${sx + sw - 20}" cy="${sy + 20}" r="9" fill="#cfd6ff"/><circle cx="${sx + sw - 16}" cy="${sy + 17}" r="8" fill="#14121a"/></g>`;
+      const dk = darkAt(S, sid);
+      if (dk) rooms += `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="#000" opacity="${dk !== 'force' && lit(S, sid) ? 0.2 : 0.62}"/><g opacity="0.85"><circle cx="${sx + sw - 20}" cy="${sy + 20}" r="9" fill="#cfd6ff"/><circle cx="${sx + sw - 16}" cy="${sy + 17}" r="8" fill="#14121a"/></g>`;
       overlays += `<rect class="${cls}" data-act="space" data-sp="${sid}" x="${sx + 3}" y="${sy + 3}" width="${sw - 6}" height="${sh - 6}" rx="3"/>`;
     }
     rooms += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#120c08" stroke-width="14"/>`;
@@ -254,6 +258,7 @@ function boardSVG(S) {
     const r = M.boss ? 28 : 24;
     return `<g class="mon ${M.boss ? 'boss' : ''}" data-act="tok" data-kind="mon" data-id="${m.mid}"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${M.boss ? '#1d1430' : '#2a0809'}" stroke="${M.boss ? '#c9bdf5' : '#d23c3f'}" stroke-width="4"/>${ART.monsters.includes(m.type) ? `<image href="art/monsters/${m.type}.webp" x="${cx - r + 2}" y="${cy - r + 2}" width="${2 * r - 4}" height="${2 * r - 4}" clip-path="url(#pclip)"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${M.boss ? '#c9bdf5' : '#d23c3f'}" stroke-width="4"/>` : `<text x="${cx}" y="${cy + 1}">${M.g}</text>`}${Array.from({length: Math.min(m.wounds, 8)}, (_, k) => `<circle cx="${cx - r + 6 + k * 7}" cy="${cy + r + 4}" r="3" fill="#ff5a55"/>`).join('')}</g>`;
   }));
+  for (const n of npcs(S).filter(n => n.found && n.id !== 'ada')) add(n.space, (cx, cy) => `<g class="tok person" data-act="tok" data-kind="interact" data-id="${n.id}"><circle cx="${cx}" cy="${cy}" r="20" fill="#f0e2c4" stroke="#8a6a2a" stroke-width="4"/><circle cx="${cx}" cy="${cy - 5}" r="6" fill="#4a3424"/><path d="M${cx - 10} ${cy + 13} Q${cx} ${cy - 1} ${cx + 10} ${cy + 13} Z" fill="#4a3424"/>${n.escort ? `<circle cx="${cx + 14}" cy="${cy - 14}" r="6" fill="#4fbf6b" stroke="#123" stroke-width="2"/>` : ''}</g>`);
   if (S.ada && S.ada.found) add(S.ada.space, (cx, cy) => `<g class="tok person" data-act="tok" data-kind="interact" data-id="ada"><circle cx="${cx}" cy="${cy}" r="22" fill="#e9e3d6" stroke="#6e5a3a" stroke-width="4"/><circle cx="${cx}" cy="${cy - 6}" r="7" fill="#3a2e24"/><path d="M${cx - 12} ${cy + 15} Q${cx} ${cy - 2} ${cx + 12} ${cy + 15} Z" fill="#3a2e24"/></g>`);
   for (const t of S.tokens) {
     const kind = t.k === 'person' ? 'interact' : t.k;
@@ -365,28 +370,25 @@ function hudHTML(S) {
   }
   return `<div class="chips">${chips}</div>${ctrl}`;
 }
+// the tide is always on screen in Chapter 2: where it is now, and where it goes next
+function tideDial(S) {
+  if (S.tide == null) return '';
+  const next = S.tideHold > 0 ? S.tide : (S.tide + 1) % 4;
+  const arc = TIDE_NAMES.map((n, i) => `<i class="td ${i === S.tide ? 'on' : ''} t${i}" title="${n}"></i>`).join('');
+  return `<span class="pill tide" title="Low → Rising → High → Falling. It turns at the start of each Mythos phase. Low spaces: Shallows when Rising or Falling, Submerged at High. Mid spaces: Shallows at High.">≈ <b>${TIDE_NAMES[S.tide]}</b><span class="tdarc">${arc}</span><small>next: ${S.tideHold > 0 ? 'holds' : TIDE_NAMES[next]}</small></span>`;
+}
 function topHTML(S) {
-  return `<h1>Greywater</h1><span class="pill">Round ${S.round}</span><span class="pill goal">${esc(goalText(S))}</span>
+  return `<h1>${S.sc === 'saltmere' ? 'Brannoc Rock' : 'Greywater'}</h1><span class="pill">Round ${S.round}</span>${tideDial(S)}<span class="pill goal">${esc(goalText(S))}</span>
     <span class="sp"></span><span class="net" id="net">${esc(G.netText || '')}</span>
     <button class="small ghost" data-act="fit" title="Fit map">⤢</button><button class="small ghost" data-act="drawer">Journal</button><button class="small ghost" data-act="rules">Rules</button><button class="small ghost" data-act="settings" title="Settings">⚙</button><button class="small ghost" data-act="home">Menu</button>`;
 }
-function goalHelp(S) {
-  if (!S.goal) return `Explore the house and find ${CONFIG.evidenceNeeded} pieces of evidence about what Dr. Marrow did here. Evidence hides behind Search (🔍) and Interact (!) tokens.`;
-  if (S.goal === 'C') { const b = S.monsters.find(m => m.type === 'marrow'); return b ? `Dr. Marrow is in the ${ROOMS[roomOf(b.space)].n}. Bring him down: he has taken ${b.wounds} of ${monHp(b)} wounds. Weapons, spells, holy water and fire all hurt him. Fight together.` : 'Find Dr. Marrow and bring him down.'; }
-  if (S.goal === 'A') {
-    const holder = S.inv.find(v => !v.out && v.items.includes('valve'));
-    return holder ? `${INVD(holder.id).name} has the Valve Wheel. Bring it to the Engine in Hydrotherapy and Interact to turn the valves (pipe puzzle, Strength).` : 'Find the Valve Wheel (search the Boiler Room), carry it to the Engine in Hydrotherapy, then Interact to turn the valves (pipe puzzle, Strength). Dr. Marrow guards it.';
-  }
-  if (S.ada && S.ada.escort) return `Ada is following ${INVD(S.ada.escort).name}. Lead her to the front doors in the Receiving Hall and Interact there.`;
-  if (S.ada && S.ada.found) return `Ada Wren is in the ${ROOMS[roomOf(S.ada.space)].n}. Go to her and Interact to calm her (Influence), then lead her to the front doors.`;
-  return 'Ada Wren is somewhere in the building. Explore to find her, calm her (Interact, Influence), then lead her out through the front doors in the Receiving Hall.';
-}
+const goalHelp = S => SCN.goalHelp(S);
 function drawerHTML(S) {
   return `<div class="dh"><h3>Journal</h3><button class="small ghost" data-act="drawer">Close</button></div>
     ${S.pro ? `<div class="ev"><div class="eyebrow">Tonight · ${esc(S.pro.t)}</div><div>${esc(S.pro.choice)}</div><small>${esc(S.pro.sum)}</small></div>` : ''}
     <div class="ev goalbox"><div class="eyebrow">Your goal</div><div class="gt">${esc(goalText(S))}</div><p>${esc(goalHelp(S))}</p>
       ${S.lastRound && S.phase === 'play' ? `<p class="dl">One of you has fallen. You have until the end of round ${S.lastRound}.</p>` : ''}
-      ${(() => { const h = !S.goal && S.log.find(e => e.t.startsWith('The hymn falters')); return h ? `<p class="hint"><b>Latest lead:</b> ${esc(h.t.replace(/^The hymn falters for a moment, and in the silence you are sure of it: /, '').replace(/^s/, 'S'))}</p>` : ''; })()}</div>
+      ${!S.goal && S.lastHint ? `<p class="hint"><b>Latest lead:</b> ${esc(S.lastHint)}</p>` : ''}
     <div class="ev"><div class="eyebrow">Evidence ${S.evidence.length}/${CONFIG.evidenceNeeded}</div>${S.evidence.length ? S.evidence.map(e => `<div>• ${esc(e)}</div>`).join('') : '<small>None yet. Search and Interact tokens may hold it.</small>'}</div>
     <div class="log">${S.log.map(e => `<div class="${e.k || ''}">${esc(e.t)}</div>`).join('')}</div>`;
 }
@@ -481,6 +483,7 @@ function renderSheet() {
     }).join('')}</div>` : '';
     const bs = [];
     if (mineActive && v.id === 'mara') bs.push(btn('Field Medic', 'medic', {}, hasAct, 'Discard 1 face-down Damage here'));
+    if (mineActive && v.id === 'linus' && S.tide != null && !v.usedTide) { bs.push(btn('Hold the tide', 'tidetables', {how: 'hold'}, true, 'Free · once per scenario')); bs.push(btn(`Turn it early (→ ${TIDE_NAMES[(S.tide + 1) % 4]})`, 'tidetables', {how: 'push'}, true, 'Free · once per scenario')); }
     if (mineActive && Object.keys(S.fire || {}).some(f => roomOf(f) === roomOf(v.space) || ADJ[v.space].some(a => a.to === f))) bs.push(btn('Extinguish', 'extinguish', {}, hasAct, `Agility ${skillVal(S, v, 'agi')}: each ✦ puts out a fire here or where you move this turn`));
     if (mineActive && (v.items.includes('matches') || v.items.includes('oillamp')) && !fireAt(S, v.space)) bs.push(btn('Set fire here', 'setfire', {}, hasAct, v.items.includes('matches') ? 'Uses up the matches' : 'With the Oil Lamp'));
     if (me && me !== v && me.space === v.space && !v.out) bs.push(btn(`Trade with ${d.name.split(' ')[0]}`, 'trade', {with: v.id}, hasAct, '1 action'));
@@ -513,7 +516,7 @@ function renderSheet() {
     if (me) h += `<div class="acts">${me.space === t.sp ? btn(info.test ? info.test[2] : 'Search', 'search', {id}, hasAct, '1 action' + (monAt(S, me.space).length ? ' · evade first' : '')) : '<small>Stand in this space to search it.</small>'}</div>`;
   } else if (kind === 'interact') {
     const I = INTERACT[id];
-    const sp = id === 'ada' ? S.ada?.space : S.tokens.find(x => x.id === id)?.sp;
+    const sp = npcById(S, id) ? npcById(S, id).space : S.tokens.find(x => x.id === id)?.sp;
     if (!I || !sp) return closeSheet();
     h += `<div class="sh-head">${I.person ? '' : '<svg width="44" height="44" viewBox="0 0 44 44">' + tokenIcon('interact', 22, 22, 19) + '</svg>'}<div><h2>${esc(I.n)}</h2><div class="role">${I.person ? 'Person' : 'Interact'} · ${esc(SP[sp].n)}</div></div></div><p class="flav">${esc(I.info(S))}</p>`;
     if (me) {
@@ -525,9 +528,10 @@ function renderSheet() {
     const jam = t.link.door != null && DOORS[t.link.door].jam;
     h += `<div class="sh-head"><svg width="44" height="44" viewBox="0 0 44 44">${tokenIcon('explore', 22, 22, 19)}</svg><div><h2>${t.link.stairs != null ? 'Stairs down' : 'A closed door'}</h2><div class="role">Explore · from ${esc(SP[t.from].n)}</div></div></div>
       <p class="flav">${t.link.stairs != null ? 'The stairs descend into cold, wet dark.' : jam ? `The door is swollen in its frame. You will have to force it (Strength, ${CONFIG.jamNeed} success${CONFIG.jamNeed > 1 ? 'es' : ''}).` : 'You don’t know what is on the other side.'}</p>`;
+    if (t.link.lowOnly) h += `<p class="flav"><b>Low tide only:</b> you can go out this way only when the tide is Low, and come back at any tide but High.</p>`;
     if (me) h += `<div class="acts">${me.space === t.from ? btn(jam ? 'Force the door (Strength)' : 'Explore', 'explore', {id}, hasAct, '1 action') : '<small>Stand in the space next to this door to explore.</small>'}</div>`;
   } else if (kind === 'stairs') {
-    h += `<h2>Stairs</h2><p class="flav">They connect the Stairwell and the Boiler Room. Moving along them counts as moving one space.</p>`;
+    h += `<h2>Stairs</h2><p class="flav">${S.sc === 'saltmere' ? 'Stairs, a ladder or a path over the rocks. Moving along them counts as moving one space. The rocks below the Slipway can only be crossed at Low tide.' : 'They connect the Stairwell and the Boiler Room. Moving along them counts as moving one space.'}</p>`;
   }
   el.innerHTML = `<button class="x" data-act="closesheet" aria-label="Close">×</button>${h}`;
   el.hidden = false;
@@ -575,6 +579,7 @@ function rollToast(r) {
 // dice
 function rollTest(D, inv, sk, o = {}) {
   const n = Math.max(1, skillVal(D, inv, sk) + (o.bonus || 0));
+  if (o.label) o.label = fixNames(o.label);
   const pkey = o.label || sk, luck = pityBonus(D, inv, pkey);
   let faces = Array.from({length: n}, () => rollFace(D, luck));
   let rerolled = false;
@@ -646,7 +651,9 @@ const EVENT_THEME = {
   radiators: ['#6b3b1f', 'pipes'], bell: ['#5a4a2a', 'sound'], lights: ['#2b2a3a', 'dark'], name: ['#3a2f4a', 'sound'],
   breath: ['#2f4a5a', 'calm'], footsteps: ['#2a4250', 'steps'], gramophone: ['#5a3a2a', 'sound'], cold: ['#1f3f5a', 'water'],
   whisper: ['#2a2238', 'dark'], seep: ['#1f3a50', 'water'], quiet: ['#26262a', 'calm'], hymn: ['#3d2f5a', 'sound'],
-  road: ['#2a3340', 'water'], settles: ['#4a3a2a', 'pipes'], sing: ['#1f3550', 'water'], swells: ['#4a2f3f', 'sound'],
+  road: ['#2a3340', 'water'], flare: ['#1f4a32', 'sound'], spring: ['#123c66', 'water'], answers: ['#14342a', 'sound'],
+  wave: ['#174566', 'water'], calm: ['#2b3b44', 'calm'], fog: ['#3a4146', 'calm'], beam: ['#1d4a30', 'sound'], gulls: ['#3a3a3a', 'sound'], body: ['#203845', 'water'],
+  tubevoice: ['#3a2f4a', 'sound'], shipbell: ['#2a3a4a', 'sound'], nets: ['#2f3a2a', 'steps'], saltcrust: ['#5a5a50', 'calm'], oilspill: ['#6b3b1f', 'pipes'], quietsea: ['#26262a', 'calm'], settles: ['#4a3a2a', 'pipes'], sing: ['#1f3550', 'water'], swells: ['#4a2f3f', 'sound'],
 };
 function storyPic(img) {
   if (!img) return '';
@@ -681,7 +688,7 @@ function mythosBody(text) {
 // end of the game: what happened, who did what, and what became of each investigator
 function showSummary(S) {
   const won = S.phase === 'won', st = S.stats || {};
-  const goal = {A: 'Silence the Resonance Engine', B: 'Lead Ada Wren out', C: 'Bring down Dr. Marrow'}[S.goal] || 'Never discovered';
+  const goal = (SCENARIOS[S.sc] || SCN).goalNames[S.goal] || 'Never discovered';
   const top = k => { let best = null, bv = 0; S.inv.forEach(v => { const x = (st[v.id] || {})[k] || 0; if (x > bv) { bv = x; best = v.id; } }); return best; };
   const titles = {}; [['kills', 'The Fighter'], ['ev', 'The Sleuth'], ['rooms', 'The Pathfinder'], ['dmg', 'The Shield'], ['searches', 'The Scavenger'], ['hor', 'The Haunted']].forEach(([k, t]) => { const id = top(k); if (id && !titles[id]) titles[id] = t; });
   const chip = (n, label) => n ? `<span class="stat">${label} <b>${n}</b></span>` : '';
@@ -693,7 +700,7 @@ function showSummary(S) {
       <p class="epi">${esc(epilogueFor(S, v))}</p></div>`;
   }).join('');
   const diff = (DIFF[(S.opt || {}).diff] || DIFF.std).n;
-  return info(won ? 'The night is over' : 'Greywater keeps its own', `<div class="eyebrow">${won ? 'Victory' : 'Defeat'} · ${diff} · ${S.round} rounds</div>
+  return info(won ? (S.partial ? 'Half a victory' : 'The night is over') : `${(SCENARIOS[S.sc] || SCN).place} keeps its own`, `<div class="eyebrow">${won ? (S.partial ? 'Partial victory' : 'Victory') : 'Defeat'} · ${(SCENARIOS[S.sc] || SCN).chapter} · ${diff} · ${S.round} rounds</div>
     <div class="stats" style="margin:8px 0 4px"><span class="stat">Goal <b>${goal}</b></span><span class="stat">Evidence <b>${S.evidence.length}/${CONFIG.evidenceNeeded}</b></span><span class="stat">Rooms found <b>${Object.values(S.rooms).filter(r => r.rev).length}/${Object.keys(S.rooms).length}</b></span></div>${rows}`, 'Close', 'story summary');
 }
 async function pumpStories() {
@@ -703,7 +710,7 @@ async function pumpStories() {
     const s = G.storyQ.shift();
     if (s.kind === 'mythos' && SET.shake) { document.body.classList.add('shake'); setTimeout(() => document.body.classList.remove('shake'), 500); }
     Snd.play({mythos: 'gong', evidence: 'chime', reveal: 'reveal', won: 'win', lost: 'lose', room: 'door', dire: 'sting'}[s.kind]);
-    const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: 'Chapter 1', insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
+    const label = {mythos: 'Mythos', reveal: 'The Reveal', evidence: 'Evidence', room: 'Explored', intro: (SCENARIOS[G.S && G.S.sc] || SCN).chapter, insane: 'Madness', dire: 'Doom', won: 'Victory', lost: 'Defeat'}[s.kind] || 'Greywater';
     await info(esc(s.title), `${storyPic(s.img)}<div class="eyebrow">${label}</div>${s.kind === 'mythos' ? mythosBody(s.text) : para(s.text)}`, s.kind === 'mythos' ? 'Face the night' : 'Continue', 'story ' + s.kind);
     if ((s.kind === 'won' || s.kind === 'lost') && G.S) { await showInsanityResults(G.S); await showSummary(G.S); await legacyEnd(G.S); }
   }
@@ -794,6 +801,7 @@ async function commit(D) {
 }
 function onState(S, force) {
   if (!force && G.S && S.gid === G.S.gid && S.rev < G.S.rev) return;
+  useScenario(S.sc || 'greywater');
   if (G.S && G.S.gid !== S.gid) { G.seenStory = null; G.vb = null; }
   const prev = G.S && G.S.gid === S.gid ? G.S : null;
   if (G.undo && S.rev !== G.undo.rev) G.undo = null;
@@ -894,8 +902,8 @@ function renderHome() {
   const codeVal = $('#code') ? $('#code').value : '';
   const nameVal = $('#pname') ? $('#pname').value : (typeof myName === 'function' ? myName() : '');
   app.innerHTML = `<div class="home">
-    <div class="title"><div class="eyebrow">Chapter 1 · a cooperative horror for 1–4 players</div><h1>Greywater</h1>
-      <p>“Come quickly. The patients have begun to sing.” A letter from the director of Greywater Sanatorium brought you to the black lake. The doors locked behind you.</p></div>
+    <div class="title"><div class="eyebrow">A cooperative horror campaign for 1–4 players</div><h1>Greywater</h1>
+      <p>Chapter 1: “Come quickly. The patients have begun to sing.” A letter from the director of Greywater Sanatorium brought you to the black lake. Chapter 2: the lamp on Brannoc Rock has turned green, and the sea sings back.</p></div>
     <div class="card"><h2>Play online</h2>
       <p class="dim" style="margin-top:0">Everyone plays on their own phone or computer — iPhone, Android or Windows. No accounts. One player hosts, and their screen must stay open.</p>
       <div class="row" style="margin-bottom:12px"><label class="dim" for="pname">Your name</label><input id="pname" maxlength="24" autocomplete="nickname" class="nm-in" placeholder="e.g. Sam"></div>
@@ -918,7 +926,7 @@ function choosePrologue() {
   const P = pick(PROLOGUES);
   return new Promise(res => {
     const opt = c => `<button data-c="${c}"><span><b>${esc(P[c].t)}</b><br><small>${esc(P[c].d)}</small><br><small class="pfx">${esc(prologueFx(P[c].fx))}</small></span></button>`;
-    const m = openModal(`${storyPic('road')}<div class="eyebrow">On the road to Greywater</div><h2>${esc(P.t)}</h2><p>${esc(P.s)}</p>
+    const m = openModal(`${storyPic('road')}<div class="eyebrow">${esc(SCN.text.road)}</div><h2>${esc(P.t)}</h2><p>${esc(P.s)}</p>
       <div class="list">${opt('a')}${opt('b')}</div><p class="dim" style="margin-bottom:0">Decide together. It lasts for this scenario only.</p><div class="btns"><button class="ghost small" data-c="x">Back</button></div>`, 'story');
     m.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; m.remove(); res(b.dataset.c === 'x' ? null : {id: P.id, c: b.dataset.c}); });
   });
@@ -931,14 +939,21 @@ function cbTag(id, legacy) {
   if (Casebook.retired(id)) return '<span class="tag">Retired</span>';
   return Casebook.isVet(id) ? '<span class="tag">Veteran</span>' : '';
 }
+// which chapter to play; Chapter 2's two new investigators are available from Chapter 2 on
+function chapterPicker(canPick, cur) {
+  cur = cur || 'greywater';
+  return `<div class="card chc"><h2>Chapter</h2><div class="chgrid">${Object.values(SCENARIOS).sort((a, b) => a.ch - b.ch).map(D => `<button class="chb ${cur === D.id ? 'on' : ''}" ${canPick ? `data-act="chapter" data-sc="${D.id}"` : 'disabled'}><small>${esc(D.chapter)}</small><b>${esc(D.name)}</b><span>${esc(D.blurb)}</span></button>`).join('')}</div>${cur !== 'greywater' ? '<p class="dim" style="margin:8px 0 0">You can play it without having played Chapter 1. In legacy mode, how Chapter 1 ended changes the opening.</p>' : ''}</div>`;
+}
+const chOK = (d, sc) => (d.ch || 1) <= (SCENARIOS[sc || 'greywater'] || SCN).ch;
 function renderSetup() {
   const p = G.localPicks;
   app.innerHTML = `<div class="home">
     <div class="row" style="justify-content:space-between"><h2 style="font-size:30px">Choose investigators</h2><button class="ghost small" data-act="home">Back</button></div>
+    ${chapterPicker(true, G.sc)}
     <p class="dim">Pick 2 to 4. Playing alone? Pick two and control both.</p>
-    <div class="invgrid">${INVESTIGATORS.map(d => { const i = p.indexOf(d.id), ret = G.legacy && Casebook.retired(d.id); return invCard(d, i >= 0 ? `<span class="tag">#${i + 1}</span>` : cbTag(d.id, G.legacy), i >= 0 ? 'mine' : ret ? 'taken' : '', ret ? 'disabled' : `data-act="lpick" data-id="${d.id}"`); }).join('')}</div>
+    <div class="invgrid">${INVESTIGATORS.filter(d => chOK(d, G.sc)).map(d => { const i = p.indexOf(d.id), ret = G.legacy && Casebook.retired(d.id); return invCard(d, i >= 0 ? `<span class="tag">#${i + 1}</span>` : cbTag(d.id, G.legacy), i >= 0 ? 'mine' : ret ? 'taken' : '', ret ? 'disabled' : `data-act="lpick" data-id="${d.id}"`); }).join('')}</div>
     ${diffPicker(true)}${legacyPicker(true, G.legacy)}
-    <div class="row" style="margin-top:16px"><button class="primary" data-act="lbegin" ${p.length >= 2 ? '' : 'disabled'}>Enter Greywater</button></div></div>`;
+    <div class="row" style="margin-top:16px"><button class="primary" data-act="lbegin" ${p.length >= 2 ? '' : 'disabled'}>Enter ${esc((SCENARIOS[G.sc || 'greywater']).place)}</button></div></div>`;
 }
 function renderLobby() {
   const L = G.lobby; if (!L) return;
@@ -950,9 +965,10 @@ function renderLobby() {
     <p class="dim" id="net">${esc(G.netText || '')}</p>
     <div class="card"><h2>At the door</h2><div class="list">${(L.seats || []).map(s => `<div class="row" style="justify-content:space-between"><span>${esc(pname(s.uid))}${s.uid === L.host ? ' <small>(host)</small>' : ''}</span><small>${(s.picks || []).filter(id => c[id] === s.uid).map(id => INVD(id).name).join(', ') || 'choosing…'}</small></div>`).join('')}</div></div>
     <div class="card"><h2>Choose your investigators</h2><p class="dim" style="margin:0">Tap to claim. 2 to 4 in total — one player may control several.</p>
-      <div class="invgrid">${INVESTIGATORS.map(d => { const o = c[d.id], mine = o === G.me, taken = o && !mine; return invCard(d, mine ? '<span class="tag">Yours</span>' : taken ? `<span class="tag">${esc(pname(o))}</span>` : '', mine ? 'mine' : taken ? 'taken' : '', seated && !taken ? `data-act="spick" data-id="${d.id}"` : 'disabled'); }).join('')}</div>
+      ${chapterPicker(isHost, L.sc)}
+      <div class="invgrid">${INVESTIGATORS.filter(d => chOK(d, L.sc)).map(d => { const o = c[d.id], mine = o === G.me, taken = o && !mine; return invCard(d, mine ? '<span class="tag">Yours</span>' : taken ? `<span class="tag">${esc(pname(o))}</span>` : '', mine ? 'mine' : taken ? 'taken' : '', seated && !taken ? `data-act="spick" data-id="${d.id}"` : 'disabled'); }).join('')}</div>
       ${diffPicker(isHost, L.diff)}${legacyPicker(isHost, L.legacy)}
-      <div class="row" style="margin-top:16px">${isHost ? `<button class="primary" data-act="obegin" ${n >= 2 ? '' : 'disabled'}>Enter Greywater</button>${n < 2 ? '<small class="dim">At least 2 investigators.</small>' : ''}` : `<small>Waiting for ${esc(pname(L.host))} to begin…</small>`}</div></div></div>`;
+      <div class="row" style="margin-top:16px">${isHost ? `<button class="primary" data-act="obegin" ${n >= 2 ? '' : 'disabled'}>Enter ${esc((SCENARIOS[L.sc || 'greywater']).place)}</button>${n < 2 ? '<small class="dim">At least 2 investigators.</small>' : ''}` : `<small>Waiting for ${esc(pname(L.host))} to begin…</small>`}</div></div></div>`;
 }
 function showRules() {
   info('How to play', `<div class="rules">
@@ -963,6 +979,7 @@ function showRules() {
     <h3>Tests</h3><p>Roll one die per point of skill: ✦ is a success, 🔍 can be turned into a success by spending a Clue (not in Darkness), blank is nothing.</p>
     <h3>Same rules for everyone</h3><p>Each action always tests the same skill against the same target, whoever attempts it — forcing the jammed door is Strength, need 1, for all. Only the number of dice differs, because it comes from that investigator's skill. The text describing the attempt changes with each character's background; it is flavour and never changes the result.</p>
     <h3>Legacy mode</h3><p>Turn it on at setup (the host decides online). At the end of each scenario every survivor chooses one reward to keep — a skill, Health or Sanity, an item, or a talent — from 3 options after a win or 2 after a loss. Face-up Damage and Horror cards you still hold become scars (−1 die on the first test of that skill each scenario); going insane leaves you Haunted (start with 1 Horror). You can spend a reward to heal instead. Death is permanent: a fallen investigator retires and leaves one possession to the next newcomer. Newcomers get Fresh Eyes (+1 Clue, and one failed roll per scenario rerolls its blanks) and catch up with half of the veterans' rewards. Records are kept in the Casebook on each player's own device.</p>
+    <h3>Chapter 2: the tide</h3><p>The tide is shown in the top bar and turns one step at the start of every Mythos phase: Low → Rising → High → Falling. Every space is low, mid or high ground. When Rising or Falling, low spaces become <b>Shallows</b>; at High they are <b>Submerged</b> and mid spaces become Shallows. Moving into water costs 1 extra movement point. Wading through Submerged spaces, or acting while in one, costs an Agility test (need 1) or 1 Damage, and you cannot Search underwater. The tide puts out fires. The rocks out to the Wreck and the Sea Cave mouth can only be crossed outward at Low tide (you can come back at any tide but High). Nell Tregarth ignores all of this; Linus Achterberg can hold the tide or turn it early, once per scenario. Silas Brannock's lantern-eye makes his space and the ones next to it Darkness that no light can lift.</p>
     <h3>Luck and the Director</h3><p><b>Bad-luck protection:</b> each time you fail the same check in a row, your dice get a little kinder, and the 3rd, 4th or 5th try in a row is a guaranteed pass — but only for checks that investigator has a fair chance at (at least 1 in 5). Sending the weakest character at a hard check over and over earns nothing. <b>The Director:</b> when the team is in real trouble, or cruising, dice luck, Mythos events, spawns and fire lean by at most 10% the other way. Both can be switched off in Settings for new games.</p>
     <h3>Damage & Horror</h3><p>Taken as cards; some stay face up with lasting effects. When Damage reaches Health you are <b>Wounded</b> (one Move action per round); when Horror reaches Sanity you go <b>Insane</b> and draw a secret card. The second time either happens, you are eliminated — and the rest of you have until the end of the next round to win.</p>
     <h3>Spells</h3><p>You see a spell’s front; its back stays hidden until you cast it, then you resolve the back — a bonus or a price — and gain a fresh copy with a new hidden back. Anyone can cast; Lore helps.</p>
@@ -985,7 +1002,7 @@ document.addEventListener('click', async e => {
     case 'install': showInstall(); break;
     case 'setup': G.localPicks = []; G.screen = 'setup'; render(); break;
     case 'lpick': { const i = G.localPicks.indexOf(b.dataset.id); if (i >= 0) G.localPicks.splice(i, 1); else if (G.localPicks.length < 4) G.localPicks.push(b.dataset.id); render(); break; }
-    case 'lbegin': { const pro = await choosePrologue(); if (!pro) break; clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {dir: SET.director, pity: SET.pity, diff: G.diff || 'std', legacy: G.legacy ? legacyFor(G.localPicks) : null, prologue: pro}); N.mode = 'local'; saveLocal(N); onState(N); break; }
+    case 'lbegin': { useScenario(G.sc || 'greywater'); G.localPicks = G.localPicks.filter(id => chOK(INVD(id), G.sc)); if (G.localPicks.length < 2) { render(); break; } const pro = await choosePrologue(); if (!pro) break; clearSubs(); G.mode = 'local'; G.seenStory = null; G.seenR = null; G.S = null; app.innerHTML = ''; const N = newGame(G.localPicks.map(id => ({id, owner: 'local'})), {sc: G.sc || 'greywater', dir: SET.director, pity: SET.pity, diff: G.diff || 'std', legacy: G.legacy ? legacyFor(G.localPicks) : null, prologue: pro}); N.mode = 'local'; saveLocal(N); onState(N); break; }
     case 'resume': { const L = loadLocal(); if (L) { clearSubs(); G.mode = 'local'; G.seenStory = L.storySeq; G.seenR = L.rseq; G.S = null; app.innerHTML = ''; onState(L); } break; }
     case 'host': hostGame(); break;
     case 'rehost': { const h = loadHost(); if (h) hostGame(h); break; }
@@ -1013,6 +1030,12 @@ document.addEventListener('click', async e => {
     case 'legacy': {
       if (G.screen === 'lobby') { if (!G.lobby || G.lobby.host !== G.me) break; G.lobby.legacy = !G.lobby.legacy; broadcast({t: 'lobby', L: G.lobby}); }
       else { G.legacy = !G.legacy; G.localPicks = G.localPicks.filter(id => !(G.legacy && Casebook.retired(id))); }
+      render(); break;
+    }
+    case 'chapter': {
+      G.sc = b.dataset.sc;
+      if (G.screen === 'lobby' && G.lobby && G.lobby.host === G.me) { G.lobby.sc = G.sc; if (typeof broadcast === 'function') broadcast({t: 'lobby', L: G.lobby}); }
+      else G.localPicks = G.localPicks.filter(id => chOK(INVD(id), G.sc));
       render(); break;
     }
     case 'diff': G.diff = b.dataset.d; if (G.screen === 'lobby' && G.lobby && G.lobby.host === G.me) { G.lobby.diff = G.diff; if (typeof broadcast === 'function') broadcast({t: 'lobby', L: G.lobby}); } render(); break;
@@ -1058,6 +1081,7 @@ document.addEventListener('click', async e => {
     }
     case 'secret': showSecret(S, b.dataset.inv, false); break;
     case 'extinguish': closeSheet(); doAction('extinguish'); break;
+    case 'tidetables': closeSheet(); doAction('tidetables', b.dataset.how); break;
     case 'setfire': closeSheet(); doAction('setfire'); break;
     case 'cast': {
       const me = S.inv[S.active], id = b.dataset.spell, Sp = SPELLS[id];

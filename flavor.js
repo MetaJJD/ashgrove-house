@@ -498,8 +498,89 @@ const EPILOGUE = {
   },
 };
 function epilogueFor(S, v) {
-  const E = EPILOGUE[v.id]; if (!E) return '';
+  const E = (S.sc === 'saltmere' ? EPILOGUE_SALT : EPILOGUE)[v.id]; if (!E) return '';
   if (S.phase !== 'won' && !v.out && S.opt && S.opt.legacy) return E.escaped;   // legacy: the campaign goes on, so the survivors get out
   if (S.phase !== 'won') return v.out ? E.fell : v.insane ? E.takenMad : E.taken;
   return v.out ? E.lost : v.insane ? E.insane : v.wounded ? E.wounded : E.fine;
 }
+
+// ------------------------------------------------------------ Chapter 2 investigators
+Object.assign(FLAVOR, {
+  nell: {
+    try: {
+      str: ['Nell hauls on it the way she hauls a lifeboat up the slip: steady, all of her back.', 'Nell sets her boots and pulls like the sea is on the other end.', 'Nell spits on her palms. She has lifted drowned men heavier than this.'],
+      agi: ['Nell moves like she does on a pitching deck — low, quick, one hand always holding on.', 'Nell times it like a wave: wait, wait — now.', 'Nell slips through the gap the way she slips between rocks at low water.'],
+      obs: ['Nell squints the way she squints at weather coming in.', 'Nell looks for what is out of place, the way you read a sea for rocks.', 'Nell scans it slowly. She is better at reading water than rooms.'],
+      lore: ['Nell frowns. Books were never her trade.', 'Nell tries to remember what her grandmother said about such things.', 'Nell turns the page over twice, hoping it will make more sense upside down.'],
+      inf: ['Nell talks the way she talks to a half-drowned man: loud, plain, no nonsense.', 'Nell crouches down and says, “Look at me. Look at me.”', 'Nell tries gentle. It doesn’t come easily to her.'],
+      will: ['Nell touches the hag-stone in her pocket and says the old words under her breath.', 'Nell has heard the sea sing before. She tells herself she didn’t answer then, either.', 'Nell sets her jaw. She has rowed into worse than this.'],
+      melee: ['Nell swings the boat hook the way she fends off a drifting hull.', 'Nell drives forward with the full weight of a lifeboat crew behind her.', 'Nell strikes once, hard, and steps back.'],
+      ranged: ['Nell aims like she throws a line: one breath, then let go.', 'Nell has shot seals off the nets. She steadies the barrel.', 'Nell fires without hesitating. Hesitating gets people drowned.'],
+      evade: ['Nell sidesteps like a deckhand dodging a swinging boom.', 'Nell ducks under the reach and keeps moving.', 'Nell goes with the movement, the way you go with a wave.'],
+      force: ['Nell puts her shoulder to it like a stuck hatch in a storm.', 'Nell hits the door with the boat hook’s butt end.', 'Nell kicks it at the hinge. Old wood gives at the hinge.'],
+      cast: ['Nell says the words fast and angry, the way she curses at the sea.', 'Nell repeats the strange words the way her grandmother taught her the tide rhymes.', 'Nell speaks it like a prayer she half believes.'],
+      calm: ['Nell wraps her coat round them and holds on.', 'Nell says, “I’m Nell. I’m from the lifeboat. I’ve got you.”', 'Nell talks low and steady, like counting strokes.'],
+      fire: ['Nell beats it out with a wet sail.', 'Nell throws a bucket of seawater over it without a word.', 'Nell smothers it with her oilskin.'],
+    },
+    ok: {
+      str: ['It comes. Twenty years of oars.', 'It gives with a groan. Nell grunts.', 'Done. She wipes her hands on her trousers.'],
+      agi: ['Easy as stepping off a jetty.', 'She is through before it knows she moved.', 'Sea legs.'],
+      obs: ['There. Like a rock showing at low water.', 'She spots it the way she spots a man in the swell.', 'Her eye catches it.'],
+      lore: ['It comes to her, word for word, in her grandmother’s voice.', 'Strange — she understands.', 'She has heard this before, at a deathbed.'],
+      inf: ['They grab hold of her and don’t let go.', 'Plain talk works.', 'They trust her. People always trust the lifeboat.'],
+      will: ['The hag-stone is warm in her hand. She holds.', 'She doesn’t answer the sea. She never has.', 'Steady. Like a hand on the tiller.'],
+    },
+    bad: {
+      str: ['It won’t shift. Not for all the oars in Saltmere.', 'Her hands slip on the wet metal.', 'She strains until her back cracks. Nothing.'],
+      agi: ['Her boot slides on the weed.', 'For once, the deck moves the wrong way.', 'Too slow. The sea would have had her.'],
+      obs: ['Too dark, too much. She can’t see it.', 'It all looks like water to her.', 'She misses it.'],
+      lore: ['It means nothing to her.', 'The words won’t sit still.', 'She shoves the page away. Not her trade.'],
+      inf: ['Too loud. They flinch away.', 'Her gentleness comes out as an order.', 'They don’t hear her over the sea.'],
+      will: ['For a moment she is back in the boat, rowing home alone.', 'The singing gets in under her oilskin.', 'She hears her own name in it, and answers.'],
+    },
+  },
+  linus: {
+    try: {
+      str: ['Linus sets down his instruments, rolls up his sleeves, and is immediately out of breath.', 'Linus applies the principle of the lever. He is not sure the lever agrees.', 'Linus pulls, apologising to his spine in Dutch.'],
+      agi: ['Linus moves with the care of a man carrying a sample jar.', 'Linus hops across, coat flapping, arms out for balance.', 'Linus calculates the jump. Then jumps a little short of it.'],
+      obs: ['Linus adjusts his spectacles and observes, the way he has observed a thousand tides.', 'Linus measures it with his eyes, then with a ruler.', 'Linus looks for the pattern. There is always a pattern.'],
+      lore: ['Linus already has a paper on this. Two, actually.', 'Linus consults his notes, then his memory, then his conscience.', 'Linus knows the currents better than anyone alive. That is the problem.'],
+      inf: ['Linus speaks softly, with a slight accent and far too many facts.', 'Linus offers a dry handkerchief and a careful explanation.', 'Linus tries to sound reassuring. He sounds like a lecturer.'],
+      will: ['Linus recites the tide constants to himself: M2, S2, N2, K1.', 'Linus reminds himself that sound is only pressure in water.', 'Linus tells himself he is here to measure it, not to listen to it.'],
+      melee: ['Linus swings with the conviction of a man who has only ever hit a barometer.', 'Linus jabs with the tide tables. They are bound in brass.', 'Linus strikes, and then apologises.'],
+      ranged: ['Linus aims, compensates for wind, and fires.', 'Linus holds the revolver like a sextant.', 'Linus pulls the trigger and flinches at the noise.'],
+      evade: ['Linus steps back with great precision and no grace.', 'Linus ducks, glasses first.', 'Linus calculates where it will strike, and stands somewhere else.'],
+      force: ['Linus examines the hinges, finds the weak one, and leans.', 'Linus pushes the door. Then reads the sign. Then pulls.', 'Linus applies his whole weight, which is not much.'],
+      cast: ['Linus reads the words as if they were a frequency.', 'Linus speaks the incantation and, despite himself, notes the pitch.', 'Linus pronounces it exactly. He wishes he did not know how.'],
+      calm: ['Linus sits down beside them and explains the tides, slowly, until they stop shaking.', 'Linus says, “It is only water. I promise you, it is only water.”', 'Linus takes off his coat and puts it round them.'],
+      fire: ['Linus beats at the flames with his notebook and immediately regrets it.', 'Linus calculates the oxygen and throws a sack over it.', 'Linus douses it with the specimen water.'],
+    },
+    ok: {
+      str: ['Against all physical evidence, it moves.', 'It gives. Linus is astonished.', 'Leverage, he says faintly. Leverage.'],
+      agi: ['He makes it, and writes down how.', 'Graceless, but correct.', 'A successful experiment.'],
+      obs: ['There. A pattern, exactly where he expected it.', 'His instruments were right.', 'He sees it, and sketches it at once.'],
+      lore: ['He understands. That is the worst part.', 'The data agree with him.', 'He knows exactly what this is.'],
+      inf: ['His patience wins them over.', 'They listen. He is very calm about terrible things.', 'They take his hand.'],
+      will: ['M2, S2, N2. He holds.', 'Only pressure in water. He holds.', 'He keeps measuring, and the measuring keeps him safe.'],
+    },
+    bad: {
+      str: ['He is not built for this. Nothing moves.', 'His glasses fall off. That is all that moves.', 'He gives up and reconsiders his life.'],
+      agi: ['He slips on the wet stone.', 'He miscalculates by a foot.', 'His coat catches. Of course it does.'],
+      obs: ['The light is wrong. The readings are wrong.', 'He sees only noise.', 'His glasses are misted with spray.'],
+      lore: ['The theory breaks down.', 'He knows the science. This is not science.', 'Every reference contradicts the last.'],
+      inf: ['Too many facts. They stop listening.', 'He explains, and explains, and loses them.', 'His accent thickens. They don’t understand.'],
+      will: ['He hears the singing current, and for a moment he thinks it is beautiful.', 'The constants slip away from him.', 'He wonders what his measurements told Marrow.'],
+    },
+  },
+});
+
+// ------------------------------------------------------------ Chapter 2 epilogues
+const EPILOGUE_SALT = {
+  mara: {fine: 'Mara stayed a week in Saltmere, nursing the village through a winter cough. She never once looked out to sea. When she left, the fishermen’s wives lined the quay.', wounded: 'Mara’s hands were cut to ribbons on the rocks. She stitched them herself, by lamplight. She does not trust lamps any more.', insane: 'Mara went home, and counts the stairs every night before bed. Thirteen. Always thirteen, though there are twelve.', lost: 'Mara went into the water after someone and did not come up. The tide brought her cap back three days later and laid it on the jetty, folded.', fell: 'Mara fell on the rock, and the sea took her before the others could reach her. Her lamp is still out there, they say, bobbing just under the surface.', takenMad: 'Mara sits in the keeper’s cottage, setting the table for nine. She smiles at everyone who comes in from the dark.', taken: 'Mara keeps watch at the top of the tower now, beside the lamp, checking the pulse of the sea.', escaped: 'Mara got them off the rock somehow, half-drowned and shaking. She has not been warm since.'},
+  elias: {fine: 'Elias catalogued the green glass and sealed it in lead. His report to the Royal Society came back marked “speculative.” He framed the rejection.', wounded: 'Elias walks with two sticks now, and refuses to discuss why the left one is bound in brass.', insane: 'Elias hums when he reads now. Customers say it sounds like the sea.', lost: 'Elias died with a book in his hands, which he would have liked. His notes on the lens are why the others got out.', fell: 'Elias fell in the tower, among the lamp’s turning brass, still reaching for the key.', takenMad: 'Elias has taken up the keeper’s log. He writes in it every night, in a hand that grows larger page by page.', taken: 'The tide brings a voice to Saltmere on still nights: an old man, reading aloud, very precisely, to the fish.', escaped: 'Elias got out on the last of the ebb, his coat full of the keeper’s papers. He has not dared read them since.'},
+  dex: {fine: 'Dex worked a season on the Saltmere boats and was good at it. He still won’t swim.', wounded: 'Dex’s ribs never set right. He says it hurts when it rains, and it always rains in Saltmere.', insane: 'Dex stands on the quay at night with his fists up, facing the sea, waiting for it to come at him.', lost: 'Dex held the door against the tide so the others could get out. They say you can still see the marks of his hands on the wood.', fell: 'Dex went down swinging on the jetty. The sea took him at the turn of the tide.', takenMad: 'Dex fights the waves now. Every night, on the rocks. He never wins.', taken: 'There is a big man among the Netted now, the fishermen say, and he moves like a boxer.', escaped: 'Dex carried two people off the rock on his back. He doesn’t talk about it.'},
+  agnes: {fine: 'Sister Agnes rang the Saltmere church bell at midnight, once, and the green light never came back. She does not know if that was her doing.', wounded: 'Agnes mended slowly in the vicarage. She and the vicar argue theology every evening, and she wins.', insane: 'Agnes prays to the sea now. She says it answers.', lost: 'Sister Agnes knelt on the rock and prayed as the tide came in. The others got out. She did not try to.', fell: 'Agnes fell in the chapel of St Brannoc, under the silent bell.', takenMad: 'Agnes rings the drowned bell every night. The sea gathers to listen.', taken: 'The fishermen say a nun walks the rock at low tide, blessing the drowned.', escaped: 'Agnes came off the rock praying aloud and has not stopped. Some nights she thinks something is praying back.'},
+  juno: {fine: 'Juno’s photograph of the dark lamp ran on the front page. Her editor called it a trick of the light. She knows better.', wounded: 'Juno’s camera hand never steadied. She switched to writing. The pieces are better than the photographs ever were.', insane: 'Juno photographs the sea every night. In every print, the horizon is a little higher.', lost: 'Juno’s camera washed up in Saltmere harbour a month later. The last plate shows the others in the boat, alive.', fell: 'Juno fell on the gallery, still focusing on the light.', takenMad: 'Juno stands on the gallery with her camera raised, waiting for the perfect shot of whatever is coming.', taken: 'A woman with a camera walks the rock at night. The flash goes off, green.', escaped: 'Juno got off the rock with one exposed plate. She has never developed it.'},
+  nell: {fine: 'Nell went back to the lifeboat. When she rows past Brannoc Rock now, the lamp is dark, and she lets herself look at it.', wounded: 'Nell’s leg was never right again. She coxes from the stern now, and the crew have never pulled better.', insane: 'Nell still goes out with the lifeboat. Sometimes she steers towards the singing, and the crew have to take the tiller from her.', lost: 'Nell went back into the water for someone — she always did — and the sea finally kept her. Saltmere rang every bell in the village.', fell: 'Nell drowned on Brannoc Rock, the one place she swore she never would.', takenMad: 'Nell rows out to the rock every night. No one sees her row back.', taken: 'On rough nights the lifeboat crew hear a coxswain calling the stroke from somewhere under the waves.', escaped: 'Nell got everyone off the rock in the dark, by feel, and then sat on the quay until morning, shaking.'},
+  linus: {fine: 'Linus published nothing. He burned his recordings of the singing currents, every one, and took a post teaching schoolboys about rivers.', wounded: 'Linus’s hands shake too much now for fine instruments. He says it is a fair price.', insane: 'Linus still measures the sea. His charts now show something rising, steadily, towards the coast.', lost: 'Linus died on the rock, but his tide tables got the others off it. They kept the book.', fell: 'Linus fell with his instruments around him, still recording.', takenMad: 'Linus sits in the watch room, keying messages into the dark. Something answers every one.', taken: 'The singing currents off Saltmere have a new voice now, low and precise, counting.', escaped: 'Linus got off the rock with his notebook and one terrible new measurement. He does not tell anyone what it was.'},
+};

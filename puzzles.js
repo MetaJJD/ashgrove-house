@@ -37,27 +37,40 @@ function wetCells(st) {
 const SLIDE_COLORS = {K: '#d9b84a', A: '#8b5a2b', B: '#4f7487', C: '#7d4a6e', D: '#5b7d47', E: '#a0773a', F: '#665a9e', G: '#9a4a3c'};
 
 function puzzleBody(id, st, ui) {
-  if (id === 'organ') {
-    const hist = st.guesses.map(g => { const f = codeFeedback(st.code, g); return `<div class="pg"><span>${g.map(i => `<i class="stop s${i}">${STOPS[i]}</i>`).join('')}</span><b title="right stop, right place">${'●'.repeat(f.exact)}</b><b class="nr" title="right stop, wrong place">${'○'.repeat(f.near)}</b></div>`; }).join('');
-    return `<p class="dim">Four of these five stops, in the right order. ● = right stop in the right place · ○ = right stop, wrong place.</p>
+  const P = PUZZLES[id], T = P.type, SY = P.syms || STOPS;
+  if (T === 'code') {
+    const hist = st.guesses.map(g => { const f = codeFeedback(st.code, g); return `<div class="pg"><span>${g.map(i => `<i class="stop s${i}">${SY[i]}</i>`).join('')}</span><b title="right one, right place">${'●'.repeat(f.exact)}</b><b class="nr" title="right one, wrong place">${'○'.repeat(f.near)}</b></div>`; }).join('');
+    return `<p class="dim">${P.hint || 'Four of these five stops, in the right order. ● = right stop in the right place · ○ = right stop, wrong place.'}</p>
       <div class="pgh">${hist || '<small>No attempts yet.</small>'}</div>
-      ${ui ? `<div class="slots">${[0, 1, 2, 3].map(i => `<span class="slot" data-pz="unslot" data-i="${i}">${ui.cur[i] != null ? `<i class="stop s${ui.cur[i]}">${STOPS[ui.cur[i]]}</i>` : '—'}</span>`).join('')}</div>
-        <div class="palette">${STOPS.map((n, i) => `<button class="small stop s${i}" data-pz="pick" data-i="${i}">${n}</button>`).join('')}</div>` : ''}`;
+      ${ui ? `<div class="slots">${[0, 1, 2, 3].map(i => `<span class="slot" data-pz="unslot" data-i="${i}">${ui.cur[i] != null ? `<i class="stop s${ui.cur[i]}">${SY[ui.cur[i]]}</i>` : '—'}</span>`).join('')}</div>
+        <div class="palette">${SY.map((n, i) => `<button class="small stop s${i}" data-pz="pick" data-i="${i}">${n}</button>`).join('')}</div>` : ''}`;
   }
-  if (id === 'desk') {
+  if (T === 'lens') {
+    const beam = lensBeam(st), on = new Set(beam.lit);
+    const mirror = (t, lit) => t.m ? `<line x1="${t.m === '/' ? 12 : 12}" y1="${t.m === '/' ? 88 : 12}" x2="88" y2="${t.m === '/' ? 12 : 88}" stroke="${lit ? '#c9f5c0' : '#b9c4cc'}" stroke-width="9" stroke-linecap="round"/>` : `<circle cx="50" cy="50" r="6" fill="#3a4a52"/>`;
+    return `<p class="dim">Turn the green beam back out to sea: it must leave through the right edge where the arrow points. Tap a mirror to flip it. Each flip is 1 step.</p>
+      <div class="pipes lens"><div class="pin" style="grid-row:${st.r0 + 1}">✺</div><div class="pg4">${st.grid.map((t, i) => `<div class="pp ${t.m ? '' : 'glass'}" ${t.m ? `data-pz="mirror" data-i="${i}"` : ''}><svg viewBox="0 0 100 100" width="100%" height="100%"><rect width="100" height="100" fill="${on.has(i) ? '#163a2a' : '#1c2226'}"/>${on.has(i) ? '<circle cx="50" cy="50" r="40" fill="#5be08a" opacity=".18"/>' : ''}${mirror(t, on.has(i))}</svg></div>`).join('')}</div><div class="pout" style="grid-row:${st.r1 + 1}">▶</div></div>`;
+  }
+  if (T === 'signal') {
+    const flashes = st.seq.map((c, i) => `<i class="sigdot ${i < st.prog ? 'done' : ''}" style="background:${SIGNAL_COLS[c]};animation-delay:${i * 0.55}s"></i>`).join('');
+    return `<p class="dim">The lamp flashes a message of six colours. Key it back in order, one colour per step. A wrong key makes the lamp stutter — and something may notice.</p>
+      <div class="sigrow">${flashes}</div><p style="text-align:center">Keyed so far: <b>${st.prog}</b> of 6</p>
+      ${ui ? `<div class="palette">${SIGNAL_COLS.map((c, i) => `<button class="small sigkey" data-pz="key" data-i="${i}" style="border-color:${c}"><i style="background:${c}"></i>${SIGNAL_NAMES[i]}</button>`).join('')}</div>` : ''}`;
+  }
+  if (T === 'slide') {
     let cells = '';
     st.grid.forEach((row, y) => [...row].forEach((ch, x) => {
       const sel = ui && ui.sel === ch && ch !== '.';
-      cells += `<div class="sc ${ch === '.' ? 'e' : 'p'} ${sel ? 'sel' : ''}" data-pz="cell" data-x="${x}" data-y="${y}" style="${ch !== '.' ? `background:${SLIDE_COLORS[ch] || '#6b4a2e'}` : ''}">${ch === 'K' ? '⚿' : ''}</div>`;
+      cells += `<div class="sc ${ch === '.' ? 'e' : 'p'} ${sel ? 'sel' : ''}" data-pz="cell" data-x="${x}" data-y="${y}" style="${ch !== '.' ? `background:${SLIDE_COLORS[ch] || '#6b4a2e'}` : ''}">${ch === 'K' ? (P.piece || '⚿') : ''}</div>`;
     }));
-    return `<p class="dim">Slide the brass key bar (⚿) out through the gap on the right. Tap a bolt, then tap an empty square along its line. Each slide is 1 step.</p><div class="slide"><div class="sgrid">${cells}</div><div class="sexit">gap ▶</div></div>`;
+    return `<p class="dim">${P.text || 'Slide the brass key bar (⚿) out through the gap on the right. Tap a bolt, then tap an empty square along its line. Each slide is 1 step.'}</p><div class="slide"><div class="sgrid">${cells}</div><div class="sexit">gap ▶</div></div>`;
   }
-  if (id === 'photo') {
+  if (T === 'picture') {
     return `<p class="dim">Rebuild the photograph. Tap two pieces to swap them, or tap one and press Rotate. Each swap or rotation is 1 step.</p>
       <div class="pgrid">${st.tiles.map((t, i) => `<div class="pt ${ui && ui.sel === i ? 'sel' : ''}" data-pz="tile" data-i="${i}"><div style="transform:rotate(${t.r * 90}deg);width:100%;height:100%">${photoSVG((t.p % 3) * 100, Math.floor(t.p / 3) * 100)}</div></div>`).join('')}</div>
       ${ui ? `<div class="row" style="justify-content:center;margin-top:8px"><button class="small" data-pz="rotate" ${ui.sel == null ? 'disabled' : ''}>Rotate ↻</button></div>` : ''}`;
   }
-  if (id === 'engine') {
+  if (T === 'pipes') {
     const wet = wetCells(st);
     return `<p class="dim">Turn the valves until water runs from the inlet (left) to the drain (right). Tap a pipe to turn it a quarter. Each turn is 1 step.</p>
       <div class="pipes"><div class="pin" style="grid-row:${st.r0 + 1}">▶</div><div class="pg4">${st.grid.map((t, i) => `<div class="pp" data-pz="pipe" data-i="${i}">${pipeTileSVG(t, wet.has(i))}</div>`).join('')}</div><div class="pout" style="grid-row:${st.r1 + 1}">▶</div></div>`;
@@ -65,16 +78,20 @@ function puzzleBody(id, st, ui) {
   return '';
 }
 function puzzleSolvedNow(id, st) {
-  if (id === 'organ') return st.guesses.some(g => codeFeedback(st.code, g).exact === 4);
-  if (id === 'desk') return slideSolved(st.grid);
-  if (id === 'photo') return st.tiles.every((t, i) => t.p === i && t.r === 0);
-  if (id === 'engine') return pipesSolved(st);
+  const T = PUZZLES[id].type;
+  if (T === 'code') return st.guesses.some(g => codeFeedback(st.code, g).exact === 4);
+  if (T === 'slide') return slideSolved(st.grid);
+  if (T === 'picture') return st.tiles.every((t, i) => t.p === i && t.r === 0);
+  if (T === 'pipes') return pipesSolved(st);
+  if (T === 'lens') return lensSolved(st);
+  if (T === 'signal') return st.prog >= st.seq.length;
 }
 
 function runPuzzle(D, id, inv) {
   const P = PUZZLES[id];
   const st = clone(D.puzzles[id]);
-  let steps = skillVal(D, inv, P.skill), wrong = 0;
+  let steps = skillVal(D, inv, P.skill) + (inv.items.includes('tidetables') && ['tidelock', 'signal'].includes(id) ? 1 : 0), wrong = 0;
+  const T = P.type;
   const dark = inDark(D, inv);
   const ui = {cur: [], sel: null};
   return new Promise(resolve => {
@@ -89,7 +106,7 @@ function runPuzzle(D, id, inv) {
         <div class="pzbar"><span class="steps">${solved ? '<b class="pass">Solved!</b>' : `Steps left: <b>${steps}</b>`}</span>
         ${canClue ? `<button class="small" data-pz="clue">Spend a Clue: +1 step <small>(${inv.clues} left)</small></button>` : dark && !solved ? '<small>Darkness: no Clues.</small>' : ''}</div>
         ${puzzleBody(id, st, solved || steps <= 0 ? null : ui)}
-        ${id === 'organ' && !solved && steps > 0 ? `<div class="row" style="justify-content:center"><button class="primary" data-pz="guess" ${ui.cur.filter(x => x != null).length === 4 ? '' : 'disabled'}>Pull the stops (1 step)</button></div>` : ''}
+        ${T === 'code' && !solved && steps > 0 ? `<div class="row" style="justify-content:center"><button class="primary" data-pz="guess" ${ui.cur.filter(x => x != null).length === 4 ? '' : 'disabled'}>${id === 'organ' ? 'Pull the stops' : 'Try the lock'} (1 step)</button></div>` : ''}
         <div class="btns"><button class="${solved || steps <= 0 ? 'primary' : 'ghost'}" data-pz="quit">${solved ? 'Continue' : steps <= 0 ? 'Out of steps — progress is kept' : 'Stop for now (progress is kept)'}</button></div>`;
       pzBroadcast({id, st, who: inv.id, steps});
     };
@@ -99,11 +116,11 @@ function runPuzzle(D, id, inv) {
       if (a === 'quit') return finish();
       if (a === 'clue') return spend();
       if (steps <= 0 || puzzleSolvedNow(id, st)) return;
-      if (id === 'organ') {
+      if (T === 'code') {
         if (a === 'pick') { const i = +b.dataset.i; const k = ui.cur.findIndex(x => x == null); if (k >= 0) ui.cur[k] = i; else if (ui.cur.length < 4) ui.cur.push(i); draw(); }
         else if (a === 'unslot') { ui.cur[+b.dataset.i] = null; draw(); }
         else if (a === 'guess') { const g = ui.cur.slice(0, 4); if (g.some(x => x == null)) return; st.guesses.push(g); if (codeFeedback(st.code, g).exact < 4) wrong++; ui.cur = []; use(); }
-      } else if (id === 'desk' && a === 'cell') {
+      } else if (T === 'slide' && a === 'cell') {
         const x = +b.dataset.x, y = +b.dataset.y, ch = st.grid[y][x];
         if (ch !== '.') { ui.sel = ui.sel === ch ? null : ch; draw(); return; }
         if (!ui.sel) return;
@@ -116,10 +133,12 @@ function runPuzzle(D, id, inv) {
         if (ui.sel === 'K' && dist > 0 && Math.max(...xs) + dist >= 4) { const out = slideMove(st.grid, 'K', 5 - Math.min(...xs)); if (out) { st.grid = out; st.moves++; use(); return; } }
         const n = dist && slideMove(st.grid, ui.sel, dist);
         if (n) { st.grid = n; st.moves++; use(); } else toast('Something is in the way.');
-      } else if (id === 'photo') {
+      } else if (T === 'picture') {
         if (a === 'tile') { const i = +b.dataset.i; if (ui.sel == null) ui.sel = i; else if (ui.sel === i) ui.sel = null; else { [st.tiles[ui.sel], st.tiles[i]] = [st.tiles[i], st.tiles[ui.sel]]; ui.sel = null; use(); return; } draw(); }
         else if (a === 'rotate' && ui.sel != null) { st.tiles[ui.sel].r = (st.tiles[ui.sel].r + 1) % 4; use(); }
-      } else if (id === 'engine' && a === 'pipe') { const t = st.grid[+b.dataset.i]; t.r = (t.r + 1) % 4; st.turns++; use(); }
+      } else if (T === 'pipes' && a === 'pipe') { const t = st.grid[+b.dataset.i]; t.r = (t.r + 1) % 4; st.turns++; use(); }
+      else if (T === 'lens' && a === 'mirror') { const t = st.grid[+b.dataset.i]; t.m = t.m === '/' ? '\\' : '/'; st.flips++; use(); }
+      else if (T === 'signal' && a === 'key') { if (+b.dataset.i === st.seq[st.prog]) st.prog++; else { wrong++; toast('The lamp stutters. Wrong colour.'); } use(); }
     });
     draw();
   });

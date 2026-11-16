@@ -17,6 +17,7 @@ const CONFIG = {
   fireSpread: 0.4,         // chance fire spreads each Mythos phase
   fireCap: 3,              // most spaces that can burn at once (0 = no limit)
   lateBurst: true,         // boiler bursts even if unexplored: the fire is waiting when you open the Boiler Room
+  legacyClock: 0.25,       // rounds taken off the hidden clock per point of carried-over power (legacy parity)
   goals: ['A', 'B', 'C'],  // possible Act II goals: A the Engine, B Ada Wren, C the Conductor
   conductorHp: [8, 4],     // goal C: Marrow's health = 8 + 4 per investigator
   conductorAura: 2,        // goal C: Will successes needed each Mythos by everyone in his room, or 1 Horror
@@ -155,23 +156,51 @@ const DOORS = [
 ];
 const STAIRS = [{a: 'S2', b: 'B2'}];
 
-// derived geometry
+// derived geometry (rebuilt when a scenario is loaded)
 const SP = {};
-for (const [rid, R] of Object.entries(ROOMS)) for (const [sid, r] of Object.entries(R.sp)) SP[sid] = {id: sid, room: rid, x: R.x + r[0], y: R.y + r[1], w: r[2], h: r[3], n: r[4]};
+const LINKS = []; // {a, b, door?, stairs?, lowOnly?}
+const ADJ = {};
 const cellSpace = (cx, cy) => Object.values(SP).find(s => cx >= s.x && cx < s.x + s.w && cy >= s.y && cy < s.y + s.h)?.id;
 const overlap = (a1, al, b1, bl) => Math.min(a1 + al, b1 + bl) - Math.max(a1, b1) > 0;
 const touch = (a, b) => ((a.x + a.w === b.x || b.x + b.w === a.x) && overlap(a.y, a.h, b.y, b.h)) || ((a.y + a.h === b.y || b.y + b.h === a.y) && overlap(a.x, a.w, b.x, b.w));
-const LINKS = []; // {a, b, door?, stairs?}
-for (const R of Object.keys(ROOMS)) {
-  const ids = Object.keys(ROOMS[R].sp);
-  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (touch(SP[ids[i]], SP[ids[j]])) LINKS.push({a: ids[i], b: ids[j]});
+function buildGeometry() {
+  for (const k of Object.keys(SP)) delete SP[k];
+  for (const k of Object.keys(ADJ)) delete ADJ[k];
+  LINKS.length = 0;
+  // a space is [x, y, w, h, name, level?] in room cells; level (Chapter 2 tide): 0 low, 1 mid, 2 high
+  for (const [rid, R] of Object.entries(ROOMS)) for (const [sid, r] of Object.entries(R.sp)) SP[sid] = {id: sid, room: rid, x: R.x + r[0], y: R.y + r[1], w: r[2], h: r[3], n: r[4], lvl: r[5] || 0};
+  for (const R of Object.keys(ROOMS)) {
+    const ids = Object.keys(ROOMS[R].sp);
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (touch(SP[ids[i]], SP[ids[j]])) LINKS.push({a: ids[i], b: ids[j]});
+  }
+  DOORS.forEach((d, i) => { d.sa = cellSpace(...d.a); d.sb = cellSpace(...d.b); d.i = i; LINKS.push({a: d.sa, b: d.sb, door: i, lowOnly: d.lowOnly, lowTo: d.lowTo}); });
+  STAIRS.forEach((s, i) => LINKS.push({a: s.a, b: s.b, stairs: i, lowOnly: s.lowOnly, lowTo: s.lowTo}));
+  Object.keys(SP).forEach(s => ADJ[s] = []);
+  LINKS.forEach(l => { ADJ[l.a].push({to: l.b, link: l}); ADJ[l.b].push({to: l.a, link: l}); });
 }
-DOORS.forEach((d, i) => { d.sa = cellSpace(...d.a); d.sb = cellSpace(...d.b); d.i = i; LINKS.push({a: d.sa, b: d.sb, door: i}); });
-STAIRS.forEach((s, i) => LINKS.push({a: s.a, b: s.b, stairs: i}));
-const ADJ = {};
-Object.keys(SP).forEach(s => ADJ[s] = []);
-LINKS.forEach(l => { ADJ[l.a].push({to: l.b, link: l}); ADJ[l.b].push({to: l.a, link: l}); });
+buildGeometry();
 const roomOf = sid => SP[sid].room;
+
+// ------------------------------------------------------------ scenarios
+// Each chapter registers its map, events and story hooks; useScenario swaps them into the shared tables.
+const SCENARIOS = {};
+let SCN = null;
+function replaceIn(target, src) {
+  if (Array.isArray(target)) { target.length = 0; src.forEach(x => target.push(x)); }
+  else { for (const k of Object.keys(target)) delete target[k]; Object.assign(target, src); }
+}
+function useScenario(id) {
+  const D = SCENARIOS[id] || SCENARIOS.greywater;
+  if (SCN === D) return;
+  replaceIn(ROOMS, D.rooms); replaceIn(DOORS, D.doors); replaceIn(STAIRS, D.stairs);
+  replaceIn(MYTHOS, D.mythos); replaceIn(BEATS, D.beats);
+  if (typeof PROLOGUES !== 'undefined') replaceIn(PROLOGUES, D.prologues || []);
+  buildGeometry();
+  SCN = D;
+}
+// the tide (Chapter 2): 0 Low, 1 Rising, 2 High, 3 Falling. Water depth in a space: 0 dry, 1 Shallows, 2+ Submerged
+const TIDE_NAMES = ['Low', 'Rising', 'High', 'Falling'];
+const waterAt = (S, sid) => S.tide == null || !SP[sid] ? 0 : Math.max(0, [0, 1, 2, 1][S.tide] - (SP[sid].lvl || 0));
 
 // --------------------------------------------------------- search spots
 const SEARCH = {
@@ -197,11 +226,11 @@ const EVIDENCE = {
 
 // ------------------------------------------------------------- monsters
 const MONSTERS = {
-  orderly: {n: 'Hollowed Orderly', g: 'O', hp: 4, aware: 2, horror: 1, dmg: 1, speed: 2, skill: 'str', kind: 'damage',
+  orderly: {n: 'Hollowed Orderly', g: 'O', hp: 4, aware: 2, horror: 1, dmg: 1, speed: 2, skill: 'str', kind: 'damage', hunts: true,
     bio: 'Hunts whoever last made a noise.', atk: ['Its cold hands pin you to the wall.', 'It swings a ring of keys like a cosh.', 'It drags you toward a door that isn’t there.']},
-  drowned: {n: 'Drowned Patient', g: 'D', hp: 3, aware: 1, horror: 1, dmg: 2, speed: 1, skill: 'agi', kind: 'damage',
+  drowned: {n: 'Drowned Patient', g: 'D', hp: 3, aware: 1, horror: 1, dmg: 2, speed: 1, skill: 'agi', kind: 'damage', swim: true,
     bio: 'Slow, heavy, relentless.', atk: ['It wraps its arms around you and sinks, as if into deep water.', 'It coughs lake water into your face and claws at you.']},
-  choir: {n: 'The Choir', g: 'C', hp: 5, aware: 3, horror: 1, dmg: 1, speed: 1, skill: 'will', kind: 'horror',
+  choir: {n: 'The Choir', g: 'C', hp: 5, aware: 3, horror: 1, dmg: 1, speed: 1, skill: 'will', kind: 'horror', darkHorror: true, avoidFire: true, pool: (S, s) => !!ROOMS[roomOf(s)].basement || roomOf(s) === 'stair',
     bio: 'A swarm of voices. Hurts the mind, not the body. Worse in Darkness.', atk: ['A hundred voices sing your name in harmony.', 'The song gets inside your teeth.']},
   marrow: {n: 'Dr. Marrow', g: 'M', hp: 8, aware: 3, horror: 2, dmg: 2, speed: 1, skill: 'str', kind: 'damage', boss: true,
     bio: 'The Conductor. Guards what you came to do.', atk: ['He conducts, and your bones answer.', 'He strikes you with his baton, and the room rings like a bell.']},
@@ -239,44 +268,53 @@ function applyLegacy(S, lgs) {
   if (lines.length) S.lgIntro = lines.join('\n\n');
 }
 function newGame(picks, opt = {}) {
+  useScenario(opt.sc || 'greywater');
   const df = DIFF[opt.diff] || {};
-  const clock = (CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax) + (df.clock || 0);
-  const evLive = shuffle(Object.keys(EVIDENCE)).slice(0, df.evLive || CONFIG.evLive);
-  // one weapon is always among the first finds; the rest of the pool, and which spell hides where, change every game
-  const rest = shuffle(['bandages', 'bandages', 'matches', 'clues2', 'clues2', 'holywater', 'laudanum', 'knife', 'lantern', 'lexicon', 'nothing', pick(['revolver', 'axe'])]);
-  const lead = shuffle([pick(['revolver', 'axe']), rest.pop(), rest.pop()]);
-  const pool = lead.concat(rest);
-  const spots = {};
-  const sp3 = shuffle(['spell:binding', 'spell:mend', 'spell:still']);
-  const fixed = {boiler: 'valve', benches: pick(['oillamp', 'oillamp', 'lantern']), bookcase: sp3[0], pews: sp3[1], tubs: sp3[2]};
-  let pi = 0;
-  for (const id of Object.keys(SEARCH)) {
-    if (fixed[id]) spots[id] = {c: fixed[id]};
-    else if (EVIDENCE[id] && evLive.includes(id)) spots[id] = {c: 'ev:' + id};
-    else spots[id] = {c: pool[pi++ % pool.length]};
-  }
+  let clock = (CONFIG.threatByPlayers[picks.length] || CONFIG.threatMax) + (df.clock || 0) + (typeof SCN.clockShift === 'object' ? SCN.clockShift[picks.length] || 0 : SCN.clockShift || 0);
+  const evLive = shuffle(SCN.evidence.slice()).slice(0, df.evLive || CONFIG.evLive);
+  const spots = SCN.spots(evLive);
   const rooms = {};
   Object.keys(ROOMS).forEach(r => rooms[r] = {rev: false});
   const S = {
-    v: 2, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: clock, beatAt: CONFIG.beatFrac.map(f => Math.round(f * clock)), maxMon: (CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters) + (df.mon || 0), grace: df.grace != null ? df.grace : CONFIG.graceRounds, opt,
+    v: 2, sc: SCN.id, gid: Math.random().toString(36).slice(2, 10), rev: 1, phase: 'play', step: 'inv', round: 1, threatMax: clock, beatAt: CONFIG.beatFrac.map(f => Math.round(f * clock)), maxMon: (CONFIG.maxByPlayers[picks.length] || CONFIG.maxMonsters) + (df.mon || 0), grace: df.grace != null ? df.grace : CONFIG.graceRounds, opt,
     threat: 0, active: -1, actions: 0, moveLeft: 0, done: picks.map(() => false),
-    inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: 'H1', items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart + (df.clues || 0), dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
-    puzzles: makePuzzles(), fire: {}, flood: {}, ext: 0, flip: null,
-    rooms, tokens: [], spots, evLive, evidence: [], goal: null, engine: 0, ada: null, monsters: [], mid: 1, dark: {},
+    inv: picks.map(p => { const d = INVD(p.id); return {id: p.id, owner: p.owner, space: SCN.start, items: d.start.slice(), spells: (d.spells || []).slice(), clues: CONFIG.clueStart + (df.clues || 0), dmg: [], hor: [], wounded: false, insane: false, out: false, moveActs: 0}; }),
+    puzzles: SCN.puzzles(), fire: {}, flood: {}, ext: 0, flip: null,
+    rooms, tokens: [], later: [], spots, evLive, evidence: [], goal: null, engine: 0, ada: null, monsters: [], mid: 1, dark: {},
     decks: {dmg: shuffle(DMG_DECK), hor: shuffle(HOR_DECK)}, noise: null, lastRound: 0, pendingBoss: null,
     mythosUsed: [], log: [], stories: [], storySeq: 0, rseq: 0, roll: null, result: null, revealed: {}, stats: {},
   };
-  if (opt.legacy) applyLegacy(S, opt.legacy);
+  if (SCN.init) SCN.init(S, opt);
+  if (opt.legacy) { applyLegacy(S, opt.legacy); legacyBalance(S, opt.legacy); }
   if (opt.prologue && typeof applyPrologue === 'function') applyPrologue(S, opt.prologue);
-  revealRoom(S, 'hall', null);
-  story(S, 'The Greywater Choir', 'Autumn, 1926. A letter from Dr. Hollis Marrow, director of Greywater Sanatorium, reached each of you on the same morning: “Come quickly. The patients have begun to sing.”\n\nYou arrive at dusk. The building on the black lake is silent. The front doors close behind you — and lock.\n\nFind out what happened at Greywater.', 'intro');
+  revealRoom(S, SCN.startRoom, null);
+  story(S, SCN.introTitle, SCN.intro, 'intro');
+  if (SCN.continuity) SCN.continuity(S, opt);
   if (S.lgIntro) { story(S, S.lgTitle || 'Old wounds, old friends', S.lgIntro, 'story'); delete S.lgIntro; delete S.lgTitle; }
-  log(S, 'Round 1. Find out what happened at Greywater.', 'round');
+  log(S, 'Round 1. ' + SCN.logStart, 'round');
   return S;
 }
-function log(S, t, k = '') { S.log.unshift({r: S.round, t, k}); if (S.log.length > 120) S.log.length = 120; }
+// legacy mode: veterans arrive stronger, so the night is a little shorter for them — a legacy party wins about as often as a fresh one
+function legacyBalance(S, lgs) {
+  let power = 0;
+  for (const v of S.inv) {
+    const L = lgs[v.id]; if (!L) continue;
+    power += Object.values(L.sk || {}).reduce((a, b) => a + b, 0) + (L.hp || 0) + (L.san || 0) + (L.talents || []).length + (L.keep || []).length * 0.7;
+    power -= (L.scars || []).length * 0.5 + (L.haunted ? 0.6 : 0);
+    if (!L.vet) power += 0.6;   // Fresh Eyes
+    if (L.bequest) power += 0.5;
+  }
+  const cut = Math.max(0, Math.round(power * CONFIG.legacyClock));
+  if (!cut) return;
+  S.threatMax = Math.max(8, S.threatMax - cut);
+  S.beatAt = CONFIG.beatFrac.map(f => Math.round(f * S.threatMax));
+  S.lgCut = cut;
+}
+// monsters with a proper name never take 'the'
+const fixNames = t => String(t).replace(/\b[Tt]he (Silas Brannock|Dr\. Marrow)/g, '$1');
+function log(S, t, k = '') { t = fixNames(t); S.log.unshift({r: S.round, t, k}); if (S.log.length > 120) S.log.length = 120; }
 function story(S, title, text, kind = 'story', img = null) { S.storySeq++; S.stories.push({seq: S.storySeq, title, text, kind, img}); if (S.stories.length > 12) S.stories.shift(); }
-function say(S, L, t, k) { log(S, t, k); if (L) L.push({t, k}); }
+function say(S, L, t, k) { t = fixNames(t); log(S, t, k); if (L) L.push({t, k}); }
 
 const nm = inv => INVD(inv.id).name;
 const stat = (S, id, key, n = 1) => { if (!id) return; S.stats = S.stats || {}; const t = S.stats[id] = S.stats[id] || {}; t[key] = (t[key] || 0) + n; };
@@ -291,6 +329,8 @@ const monAt = (S, sp) => S.monsters.filter(m => m.space === sp);
 const revealed = (S, sid) => S.rooms[roomOf(sid)].rev;
 const allDone = S => S.inv.every((v, i) => v.out || S.done[i]);
 const passable = (S, l) => revealed(S, l.a) && revealed(S, l.b);
+// a low-tide-only path: you can only go out along it at Low tide, and come back any time but High
+const tidePass = (S, l, to) => !l.lowOnly || S.tide == null || (S.tide === 0 || (S.tide !== 2 && roomOf(to) !== roomOf(l.lowTo || l.b)));
 
 function skillVal(S, inv, sk) {
   let v = INVD(inv.id)[sk];
@@ -298,15 +338,22 @@ function skillVal(S, inv, sk) {
   for (const c of inv.hor) { const C = HOR_CARDS[c]; if (C.up && C.mod && C.mod[sk]) v += C.mod[sk]; }
   for (const k of inv.items) { const I = ITEMS[k]; if (I && I.mod && I.mod[sk]) v += I.mod[sk]; }
   if (S && S.pro && S.pro.sk && S.pro.sk[sk]) v += S.pro.sk[sk];
+  if (inv.id === 'nell' && sk === 'agi' && S && waterAt(S, inv.space) >= 1) v += 1;
   if (inv.lg) { v += (inv.lg.sk && inv.lg.sk[sk]) || 0; if (inv.scarFresh && inv.scarFresh[sk]) v -= 1; }
   return Math.max(1, v);
 }
 const hasFlag = (inv, f) => inv.hor.some(c => HOR_CARDS[c].up && HOR_CARDS[c].flag === f) || inv.dmg.some(c => DMG_CARDS[c].up && DMG_CARDS[c].flag === f);
 function lit(S, sid) {
+  if (SCN && SCN.litAt && SCN.litAt(S, sid)) return true;
   const near = [sid, ...ADJ[sid].filter(a => passable(S, a.link)).map(a => a.to)];
   return near.some(s => S.fire && S.fire[s]) || S.inv.some(i => !i.out && near.includes(i.space) && i.items.some(k => ITEMS[k] && ITEMS[k].light));
 }
-const inDark = (S, inv) => !!S.dark[inv.space] && !lit(S, inv.space);
+const darkAt = (S, sid) => {
+  const h = SCN && SCN.darkAt ? SCN.darkAt(S, sid) : null;   // 'force' = dark even with a light; true = dark unless lit
+  if (h === 'force') return 'force';
+  return !!S.dark[sid] || !!h;
+};
+const inDark = (S, inv) => { const d = darkAt(S, inv.space); return d === 'force' || (d && !lit(S, inv.space)); };
 
 function autoTest(S, inv, sk, bonus = 0) {
   const n = Math.max(1, skillVal(S, inv, sk) + bonus);
@@ -390,23 +437,24 @@ function eliminate(S, inv, why, L) {
     S.tokens.push({id, k: 'search', sp: inv.space});
   }
   inv.items = [];
-  if (S.ada && S.ada.escort === inv.id) S.ada.escort = null;
+  npcs(S).forEach(n => { if (n.escort === inv.id) n.escort = null; });
   say(S, L, `${nm(inv)} is lost to ${why}. Their belongings lie where they fell.`, 'dire');
   if (!S.lastRound) {
     S.lastRound = (S.step === 'inv' ? S.round : S.round + 1) + (S.grace != null ? S.grace : (CONFIG.graceRounds || 0));
     const left = S.lastRound - S.round + (S.step === 'inv' ? 1 : 0);
-    story(S, 'One of you has fallen', `${nm(inv)} is gone. The rest of you have until the end of ${left <= 1 ? 'this investigator phase' : `round ${S.lastRound}`} to finish this — or Greywater keeps you all.`, 'dire');
+    story(S, 'One of you has fallen', `${nm(inv)} is gone. The rest of you have until the end of ${left <= 1 ? 'this investigator phase' : `round ${S.lastRound}`} to finish this — or ${SCN.place} keeps you all.`, 'dire');
   }
-  if (!activeInv(S).length) end(S, 'lost', 'Every investigator has fallen. In the Day Room, five new chairs have been turned to face the lake.');
+  if (!activeInv(S).length) end(S, 'lost', SCN.text.allFallen);
 }
 // a boss died (by any means): in goal C that is the win
-function bossDown(S) {
-  if (S.goal === 'C') end(S, 'won', 'Marrow’s arms drop mid-beat. All through the house a hundred voices stop on the same breath, as if someone had lifted a needle from a record. The black lake is only a lake again.');
-}
-function end(S, phase, text) {
+function bossDown(S) { if (SCN.bossDown) SCN.bossDown(S); }
+// escorted people (Ada in Chapter 1, the Brannock children in Chapter 2)
+const npcs = S => [S.ada && Object.assign(S.ada, {id: S.ada.id || 'ada'}), ...(S.kids || [])].filter(Boolean);
+const npcById = (S, id) => npcs(S).find(n => n.id === id);
+function end(S, phase, text, partial) {
   if (S.phase !== 'play') return;
-  S.phase = phase; S.result = text;
-  story(S, phase === 'won' ? 'Greywater falls silent' : 'The hymn is complete', text, phase);
+  S.phase = phase; S.result = text; if (partial) S.partial = true;
+  story(S, phase === 'won' ? (partial ? SCN.text.partialTitle : SCN.text.winTitle) : SCN.text.loseTitle, text, phase);
   log(S, phase === 'won' ? 'You win.' : 'You lose.', phase === 'won' ? 'good' : 'dire');
 }
 
@@ -417,11 +465,13 @@ function revealRoom(S, rid, by) {
   S.rooms[rid].rev = true; if (by) stat(S, by.id, 'rooms');
   for (const [sp, k, id] of R.tokens) S.tokens.push({id, k, sp});
   if (R.dark) Object.keys(R.sp).forEach(s => S.dark[s] = true);
+  if (S.tide != null) floodFromTide(S);
   const L = [];
   for (const [type, sp] of (R.spawn || [])) L.push(spawn(S, type, sp));
-  if (rid === 'boiler' && S.boilerBurst) { S.boilerBurst = false; S.fire = S.fire || {}; S.fire.B1 = true; L.push('The boiler has burst. Fire has taken hold around it.'); }
-  if (S.pendingBoss && roomOf(S.pendingBoss) === rid) { L.push(spawn(S, 'marrow', S.pendingBoss)); S.pendingBoss = null; }
-  if (S.ada && !S.ada.found && roomOf(S.ada.space) === rid) { S.ada.found = true; L.push('Someone is here: a young woman in a patient’s gown, humming under her breath. Ada Wren.'); }
+  if (SCN.onReveal) SCN.onReveal(S, rid, L);
+  if (S.pendingBoss) { const pb = typeof S.pendingBoss === 'string' ? {sp: S.pendingBoss, type: 'marrow'} : S.pendingBoss; if (roomOf(pb.sp) === rid) { L.push(spawn(S, pb.type, pb.sp)); S.pendingBoss = null; } }
+  for (const n of npcs(S)) if (!n.found && roomOf(n.space) === rid) { n.found = true; L.push(n.meet || 'Someone is here: a young woman in a patient’s gown, humming under her breath. Ada Wren.'); }
+  if (S.later && S.later.length) { const now = S.later.filter(t => roomOf(t.sp) === rid); S.tokens.push(...now); S.later = S.later.filter(t => !now.includes(t)); }
   if (by) story(S, R.n, R.d + (L.length ? '\n\n' + L.join('\n') : '') + (R.dark ? '\n\nIt is dark here. You cannot spend Clues in Darkness without a light.' : ''), 'room', 'room:' + rid);
 }
 function exploreTargets(S) {
@@ -447,7 +497,9 @@ function spawn(S, type, sp) {
   if (!sp) {
     const cand = Object.keys(SP).filter(s => revealed(S, s));
     const dist = distFromInvestigators(S);
-    const pool = type === 'choir' ? cand.filter(s => ROOMS[roomOf(s)].basement || roomOf(s) === 'stair') : cand;
+    const M = MONSTERS[type];
+    const pool = M.pool ? cand.filter(s => M.pool(S, s)) : cand;
+    if (M.needPool && !pool.length) return M.noPool || held;
     const occupied = new Set(activeInv(S).map(i => roomOf(i.space)));
     let use = (pool.length ? pool : cand).filter(s => !occupied.has(roomOf(s)));
     if (!use.length) use = (pool.length ? pool : cand).filter(s => !invAt(S, s).length);
@@ -464,9 +516,25 @@ function bfs(S, from, opts = {}) {
     const s = q.shift();
     if (opts.blockMon && s !== from && monAt(S, s).length) continue;
     for (const a of ADJ[s]) {
-      if (a.to in dist || !passable(S, a.link)) continue;
+      if (a.to in dist || !passable(S, a.link) || !tidePass(S, a.link, a.to)) continue;
       if (opts.avoidFire && S.fire && S.fire[a.to]) continue;
       dist[a.to] = dist[s] + 1; prev[a.to] = s; q.push(a.to);
+    }
+  }
+  return {dist, prev};
+}
+// movement points an investigator needs to reach each space: Shallows and Submerged spaces cost 1 extra to enter
+function moveDist(S, inv) {
+  if (S.tide == null) return bfs(S, inv.space, {blockMon: true});
+  const dist = {[inv.space]: 0}, prev = {}, open = [inv.space];
+  while (open.length) {
+    open.sort((a, b) => dist[a] - dist[b]);
+    const s = open.shift();
+    if (s !== inv.space && monAt(S, s).length) continue;
+    for (const a of ADJ[s]) {
+      if (!passable(S, a.link) || !tidePass(S, a.link, a.to)) continue;
+      const c = dist[s] + 1 + (inv.id !== 'nell' && waterAt(S, a.to) >= 1 ? 1 : 0);
+      if (dist[a.to] == null || c < dist[a.to]) { dist[a.to] = c; prev[a.to] = s; if (!open.includes(a.to)) open.push(a.to); }
     }
   }
   return {dist, prev};
@@ -479,10 +547,11 @@ function distFromInvestigators(S) {
 function monsterAttack(S, m, inv, L) {
   const M = MONSTERS[m.type];
   const s = autoTest(S, inv, M.skill);
-  const loss = Math.max(0, M.dmg - s);
+  const loss = Math.max(0, M.dmg + (M.tideBonus && S.tide === 2 ? 1 : 0) - s);
   const line = pick(M.atk).replace(/\.$/, '');
   if (!loss) { say(S, L, `${M.n} → ${nm(inv)}: ${line} (${SKILL_NAMES[M.skill]} ${s}: no harm done.)`); return; }
   if (M.kind === 'horror') scare(S, inv, loss, `${M.n}: ${line}`, L); else hurt(S, inv, loss, `${M.n}: ${line}`, L);
+  if (M.snare && !inv.out && !inv.restrained) { inv.restrained = true; say(S, L, `${nm(inv)} is tangled in the nets: Restrained (only 1 action next turn).`, 'bad'); }
 }
 function activateMonsters(S, L) {
   for (const m of S.monsters.slice()) {
@@ -490,7 +559,7 @@ function activateMonsters(S, L) {
     if (!S.monsters.includes(m)) continue;
     const M = MONSTERS[m.type];
     let targets = activeInv(S);
-    if (m.type === 'orderly' && S.noise) { const t = S.inv.find(i => i.id === S.noise && !i.out); if (t) targets = [t]; }
+    if (M.hunts && S.noise) { const t = S.inv.find(i => i.id === S.noise && !i.out); if (t) targets = [t]; }
     if (!targets.length) return;
     const start = m.space;
     fireHurtsMon(S, m, L);
@@ -500,12 +569,12 @@ function activateMonsters(S, L) {
     let budget = bound ? 0 : M.speed, guard = 0;
     while (budget > 0 && guard++ < 6) {
       if (invAt(S, m.space).some(i => targets.includes(i))) break;
-      const {prev, dist} = bfs(S, m.space, {avoidFire: m.type === 'choir'});
+      const {prev, dist} = bfs(S, m.space, {avoidFire: !!M.avoidFire});
       const goal = targets.map(t => t.space).filter(s => dist[s] != null).sort((a, b) => dist[a] - dist[b])[0];
       if (!goal) break;
       let c = goal; while (prev[c] !== m.space) c = prev[c];
       m.space = c;
-      if (!(m.type === 'drowned' && floodAt(S, c))) budget--;
+      if (!(M.swim && floodAt(S, c))) budget--;
       if (fireAt(S, c)) { fireHurtsMon(S, m, L); if (!S.monsters.includes(m)) break; }
     }
     if (!S.monsters.includes(m)) continue;
@@ -519,8 +588,8 @@ function horrorChecks(S, L) {
     if (S.phase !== 'play') return;
     const ms = S.monsters.filter(m => roomOf(m.space) === roomOf(inv.space));
     if (!ms.length) continue;
-    const hz = Math.max(...ms.map(m => MONSTERS[m.type].horror + (m.type === 'choir' && S.dark[m.space] ? 1 : 0)));
-    const top = ms.find(m => MONSTERS[m.type].horror + (m.type === 'choir' && S.dark[m.space] ? 1 : 0) === hz);
+    const hz = Math.max(...ms.map(m => MONSTERS[m.type].horror + (MONSTERS[m.type].darkHorror && S.dark[m.space] ? 1 : 0)));
+    const top = ms.find(m => MONSTERS[m.type].horror + (MONSTERS[m.type].darkHorror && S.dark[m.space] ? 1 : 0) === hz);
     const w = autoTest(S, inv, 'will');
     const loss = Math.max(0, hz - w);
     const tn = MONSTERS[top.type].n.replace(/^The /, '');
@@ -588,7 +657,8 @@ function evidenceHint(S, L) {
   const id = pick(left);
   const rid = Object.keys(ROOMS).find(r => (ROOMS[r].tokens || []).some(t => t[2] === id));
   if (!rid) return;
-  say(S, L, `The hymn falters for a moment, and in the silence you are sure of it: something that matters is waiting in the ${ROOMS[rid].n}.`, 'good');
+  S.lastHint = `Something that matters is waiting in the ${ROOMS[rid].n}.`;
+  say(S, L, SCN.text.hint(ROOMS[rid].n), 'good');
 }
 
 const beatsOf = S => S.beatAt || [4, 8, 12];
@@ -597,11 +667,12 @@ function mythosPhase(S) {
   S.step = 'mythos';
   if (S.proSpawn) { L.push('Something heard you coming. ' + spawn(S, S.proSpawn)); delete S.proSpawn; }
   if (S.lastRound && S.round >= S.lastRound) {
-    end(S, 'lost', 'You ran out of time after one of you fell. The doors of Greywater never open again.');
+    end(S, 'lost', SCN.text.fallLoss);
     S.step = 'inv'; return;
   }
   S.threat++;
   dirUpdate(S);
+  if (SCN.preMythos) SCN.preMythos(S, L);
   const bi = beatsOf(S).indexOf(S.threat), beat = BEATS[bi];
   let title, flavor, img;
   if (beat) { title = beat.t; flavor = beat.f; img = beat.id; log(S, `Mythos: ${beat.t}. ${beat.f}`, 'myth'); beat.fx(S, L); if (!S.goal && bi > 0) evidenceHint(S, L); }
@@ -616,9 +687,9 @@ function mythosPhase(S) {
   const section = (h, fn) => { const n = L.length; L.push({t: h, k: 'round'}); fn(S, L); if (L.length === n + 1) L.pop(); };
   if (S.phase === 'play' && CONFIG.noiseSummon && !(CONFIG.noiseSummon === 'once' && S.noiseSummoned) && S.noise && !S.monsters.some(m => m.type === 'orderly')) { const who = S.inv.find(i => i.id === S.noise); if (who && !who.out) { S.noiseSummoned = true; say(S, L, `Something heard the noise ${nm(who)} made. ` + spawn(S, 'orderly'), 'bad'); } }
   if (S.phase === 'play') section('— The monsters move —', activateMonsters);
-  if (S.phase === 'play' && S.goal === 'C') { const b = S.monsters.find(m => m.type === 'marrow'); if (b) activeInv(S).filter(i => roomOf(i.space) === roomOf(b.space)).forEach(i => { if (autoTest(S, i, 'will') < CONFIG.conductorAura) scare(S, i, 1, 'Marrow conducts, and the hymn pours through the room', L); else say(S, L, `${nm(i)} holds firm against the Conductor's hymn (Will).`); }); }
+  if (S.phase === 'play' && SCN.midMythos) SCN.midMythos(S, L);
   if (S.phase === 'play') section('— Horror checks —', horrorChecks);
-  if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', 'The last note of the hymn rings out across the black lake. Every voice in Greywater — yours included — joins in.');
+  if (S.phase === 'play' && S.threat >= (S.threatMax || CONFIG.threatMax)) end(S, 'lost', SCN.text.clockLoss);
   S.noise = null;
   S.step = 'inv';
   if (S.phase === 'play') {
@@ -637,9 +708,11 @@ function gainEvidence(S, inv, key) {
   S.evidence.push(E.n); stat(S, inv && inv.id, 'ev');
   log(S, `${nm(inv)} finds evidence: ${E.n} (${S.evidence.length}/${CONFIG.evidenceNeeded}).`, 'clue');
   story(S, `Evidence: ${E.n}`, E.t + `\n\nEvidence ${S.evidence.length} of ${CONFIG.evidenceNeeded}.`, 'evidence');
-  if (S.evidence.length >= CONFIG.evidenceNeeded && !S.goal) theReveal(S);
+  if (S.evidence.length >= CONFIG.evidenceNeeded && !S.goal) SCN.reveal(S);
 }
-function theReveal(S) {
+const theReveal = S => SCN.reveal(S);
+const goalText = S => SCN.goalText(S);
+function gwReveal(S) {
   S.goal = pick(CONFIG.goals);
   if (S.goal === 'C') {
     const t = 'There is no machine and no patient at the heart of this. There is only him. Dr. Marrow has stood in the lake water so long that the hymn runs through him like current through a wire: he is the Conductor, and while he stands, the Choir sings.\n\nYOUR GOAL: Find Dr. Marrow and bring him down. He is stronger than anything else in this house, and he is already coming for you. Weapons, spells and fire all hurt him.';
@@ -666,7 +739,7 @@ function theReveal(S) {
   }
   log(S, 'The Reveal: ' + (S.goal === 'A' ? 'silence the Resonance Engine.' : S.goal === 'C' ? 'bring down Dr. Marrow, the Conductor.' : 'lead Ada Wren out alive.'), 'clue');
 }
-function goalText(S) {
+function gwGoalText(S) {
   if (!S.goal) return `Act I · Find evidence (${S.evidence.length}/${CONFIG.evidenceNeeded})`;
   if (S.goal === 'A') return 'Act II · Silence the Engine';
   if (S.goal === 'C') return 'Act II · Bring down Dr. Marrow';

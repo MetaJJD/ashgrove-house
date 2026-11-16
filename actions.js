@@ -134,7 +134,7 @@ const ACT = {
   async endturn(D) { D.actions = 0; D.moveLeft = 0; return 'free'; },
   async move(D, inv, to, ctx) {
     const steps = D.moveLeft > 0 ? D.moveLeft : CONFIG.moveSpaces;
-    const {dist} = bfs(D, inv.space, {blockMon: true});
+    const {dist} = moveDist(D, inv);
     const d = dist[to];
     if (d == null || to === inv.space) return false;
     let fresh = false;
@@ -144,10 +144,15 @@ const ACT = {
       D.actions--; inv.moveActs++; D.moveLeft = CONFIG.moveSpaces; fresh = true;
     }
     if (monAt(D, inv.space).length && !(await evade(D, inv, ctx))) { D.moveLeft = 0; return 'free'; }
-    const {prev} = bfs(D, inv.space, {blockMon: true});
+    const {prev} = moveDist(D, inv);
     const path = []; for (let c = to; c && c !== inv.space; c = prev[c]) path.unshift(c);
     inv.space = to; D.moveLeft -= d;
-    if (D.ada && D.ada.escort === inv.id) D.ada.space = to;
+    npcs(D).forEach(n => { if (n.escort === inv.id) n.space = to; });
+    // wading into deep water: one Agility test for the whole move, or 1 Damage
+    if (inv.id !== 'nell' && path.some(c => waterAt(D, c) >= 2)) {
+      const s = await ctx.test('agi', {label: 'Wade through the deep water', need: 1});
+      if (s < 1) hurt(D, inv, 1, 'the sea drags at them');
+    }
     log(D, `${nm(inv)} moves to ${SP[to].n} (${ROOMS[roomOf(to)].n}).`);
     for (const c of path) if (fireAt(D, c)) {
       if (D.ext > 0) { D.ext--; delete D.fire[c]; log(D, `${nm(inv)} beats out the fire in ${SP[c].n}.`, 'good'); }
@@ -171,6 +176,7 @@ const ACT = {
     const tok = D.tokens.find(t => t.id === id && t.k === 'search' && t.sp === inv.space);
     if (!tok) return false;
     if (!(await ctx.gate())) return true;
+    if (waterAt(D, inv.space) >= 2) { ctx.toast('Underwater: you can’t search here until the tide drops.'); return false; }
     const spot = D.spots[id], info = SEARCH[id];
     stat(D, inv.id, 'searches');
     if (info && info.test) {
@@ -184,8 +190,8 @@ const ACT = {
     return true;
   },
   async interact(D, inv, id, ctx) {
-    const isAda = id === 'ada';
-    const tok = isAda ? (D.ada && D.ada.found && D.ada.space === inv.space) : D.tokens.find(t => t.id === id && t.sp === inv.space);
+    const npc = npcById(D, id);
+    const tok = npc ? (npc.found && npc.space === inv.space) : D.tokens.find(t => t.id === id && t.sp === inv.space);
     if (!tok) return false;
     const I = INTERACT[id];
     if (I.can && !I.can(D, inv)[0]) { ctx.toast(I.can(D, inv)[1]); return false; }
@@ -195,7 +201,8 @@ const ACT = {
     const m = D.monsters.find(x => x.mid === a.mid);
     if (!m) return false;
     const W = a.weapon === 'fists' ? {melee: true, skill: 'str', bonus: 0} : ITEMS[a.weapon].w;
-    if (W.melee && m.space !== inv.space) return false;
+    const adj = ADJ[inv.space].some(a => a.to === m.space && passable(D, a.link));
+    if (W.melee && m.space !== inv.space && !(W.reach && adj)) return false;
     if (W.ranged && roomOf(m.space) !== roomOf(inv.space)) return false;
     const M = MONSTERS[m.type];
     const s = await ctx.test(W.skill, {label: `Attack the ${M.n} with ${a.weapon === 'fists' ? 'your fists' : ITEMS[a.weapon].n}`, bonus: W.bonus});
@@ -276,6 +283,14 @@ const ACT = {
     setFire(D, inv.space);
     return true;
   },
+  // Linus Achterberg: once per scenario, hold the tide for a round or push it on a step
+  async tidetables(D, inv, a) {
+    if (inv.id !== 'linus' || D.tide == null || inv.usedTide) return false;
+    inv.usedTide = true;
+    if (a === 'push') { D.tide = (D.tide + 1) % 4; floodFromTide(D); log(D, `${nm(inv)} reads the water and times it to the minute: the tide turns early (${TIDE_NAMES[D.tide]}).`, 'good'); }
+    else { D.tideHold = 1; log(D, `${nm(inv)} checks the tables: the tide will hold for a round.`, 'good'); }
+    return 'free';
+  },
   async endphase(D) {
     if (D.active >= 0 || !allDone(D)) return false;
     mythosPhase(D);
@@ -289,10 +304,10 @@ function hitMonster(D, m, dmg, who, by) {
   if (m.wounds >= monHp(m)) {
     D.monsters = D.monsters.filter(x => x !== m); stat(D, by, 'kills');
     log(D, `${who} for ${dmg}. The ${M.n} is destroyed.`, 'good');
-    if (M.boss && D.goal === 'C') bossDown(D);
-    else if (M.boss) story(D, 'Dr. Marrow falls', 'Marrow folds to the floor like an empty coat. His baton keeps twitching in time for a while after. It doesn’t end the song — but nobody is conducting it now.', 'story');
+    if (M.boss && SCN.bossWins && SCN.bossWins(D)) bossDown(D);
+    else if (M.boss && SCN.bossStory) story(D, SCN.bossStory[0], SCN.bossStory[1], 'story');
   } else log(D, `${who} for ${dmg}. The ${M.n} is hurt.`);
 }
-const NO_EVADE = ['attack', 'start', 'endturn', 'endphase', 'extinguish'];
-const FREE_KINDS = ['move', 'start', 'endturn', 'endphase'];
+const NO_EVADE = ['attack', 'start', 'endturn', 'endphase', 'extinguish', 'tidetables'];
+const FREE_KINDS = ['move', 'start', 'endturn', 'endphase', 'tidetables'];
 const needsAction = (D, kind) => !FREE_KINDS.includes(kind) && D.actions < 1;

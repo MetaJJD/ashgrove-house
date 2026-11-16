@@ -80,10 +80,15 @@ function nearSpace(D, inv) {
 
 // ============================================================ FIRE & FLOOD
 const fireAt = (D, s) => !!(D.fire && D.fire[s]);
-const floodAt = (D, s) => !!(D.flood && D.flood[s]);
+const floodAt = (D, s) => !!(D.flood && D.flood[s]) || waterAt(D, s) >= 1;
+// the tide puts out fires in the spaces it reaches
+function floodFromTide(D, L) {
+  for (const s of Object.keys(D.fire || {})) if (waterAt(D, s) >= 1) { delete D.fire[s]; if (L) say(D, L, `The tide puts out the fire in ${SP[s].n}.`); }
+}
 function setFire(D, s, L) {
   D.fire = D.fire || {}; D.flood = D.flood || {};
   if (D.flood[s]) { delete D.flood[s]; say(D, L, `Fire meets water in ${SP[s].n}: steam, and both are gone.`); return; }
+  if (waterAt(D, s) >= 1) { say(D, L, `Sparks hiss out in the water in ${SP[s].n}.`); return; }
   if (D.fire[s]) return;
   D.fire[s] = true;
   say(D, L, `Fire breaks out in the ${ROOMS[roomOf(s)].n} (${SP[s].n}).`, 'bad');
@@ -122,6 +127,12 @@ const PUZZLES = {
   desk: {n: "Marrow's Desk", type: 'slide', skill: 'obs'},
   photo: {n: 'The Torn Photograph', type: 'picture', skill: 'obs'},
   engine: {n: 'The Engine Valves', type: 'pipes', skill: 'str'},
+  // Chapter 2
+  lens: {n: 'The Lens', type: 'lens', skill: 'obs'},
+  signal: {n: 'The Signal Key', type: 'signal', skill: 'lore'},
+  tidelock: {n: 'The Tide-Lock', type: 'code', skill: 'lore', syms: ['Ebb', 'Flood', 'Neap', 'Spring', 'Slack'],
+    hint: 'The strongbox lock turns through the tide words. Four of these five, in the right order. ● = right word in the right place · ○ = right word, wrong place.'},
+  knots: {n: 'Thirteen Knots', type: 'slide', skill: 'agi', piece: '⚓', text: 'Work the bell clapper (⚓) free of the knotted rope: slide it out through the gap on the right. Tap a knot, then tap an empty square along its line. Each slide is 1 step.'},
 };
 const STOPS = ['Vox', 'Flute', 'Reed', 'Bourdon', 'Celeste'];
 // Sliding-block layouts: 5×5, key bar 'K' on row 2 must slide out to the right. Verified solvable.
@@ -132,11 +143,12 @@ const SLIDE_LEVELS = [ // solver-verified, 5–6 moves
   ['.CCC.', '..F..', 'KKFD.', '.A.D.', '.AEE.'],
   ['A.BBB', 'A..C.', 'KK.C.', '.DDE.', '...E.'],
 ];
+const makeCode = () => ({code: shuffle([0, 1, 2, 3, 4]).slice(0, 4), guesses: [], solved: false});
+const makeSlide = () => ({grid: pick(SLIDE_LEVELS).slice(), moves: 0, solved: false});
 function makePuzzles() {
   const P = {};
-  const code = shuffle([0, 1, 2, 3, 4]).slice(0, 4);
-  P.organ = {code, guesses: [], solved: false};
-  P.desk = {grid: pick(SLIDE_LEVELS).slice(), moves: 0, solved: false};
+  P.organ = makeCode();
+  P.desk = makeSlide();
   let tiles = Array.from({length: 9}, (_, i) => ({p: i, r: 0}));
   for (let k = 0; k < 6; k++) {
     if (Math.random() < 0.5) { const a = rnd(9), b = rnd(9); [tiles[a], tiles[b]] = [tiles[b], tiles[a]]; }
@@ -172,6 +184,52 @@ function makePipes() {
   return st;
 }
 const pipeDirs = t => t.c.map(d => (d + t.r) % 4);
+
+// lens: a 4×4 grid of glass. The beam enters from the left on row r0, moving east; '/' and '\\' mirrors turn it.
+// Tap a mirror to flip it. Solved when the beam leaves through the right edge on row r1 — out to sea.
+const LENS_TURN = {'/': {1: 0, 0: 1, 3: 2, 2: 3}, '\\': {1: 2, 2: 1, 3: 0, 0: 3}};   // moving dir -> new dir (0 N, 1 E, 2 S, 3 W)
+function makeLens() {
+  const W = 4, H = 4, r0 = rnd(H);
+  let x = 0, y = r0, from = 3; const path = [];
+  while (true) {
+    const ty = rnd(H);
+    while (y !== ty) { const d = ty > y ? 2 : 0; path.push({x, y, a: from, b: d}); from = (d + 2) % 4; y += d === 2 ? 1 : -1; }
+    path.push({x, y, a: from, b: 1}); from = 3;
+    if (x === W - 1) break; x++;
+  }
+  const grid = [];
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const p = path.find(q => q.x === i && q.y === j);
+    if (p) {
+      const move = (p.a + 2) % 4;
+      if (move === p.b) grid.push({m: null, path: true});
+      else grid.push({m: LENS_TURN['/'][move] === p.b ? '/' : '\\', path: true});
+    } else grid.push({m: Math.random() < 0.5 ? null : pick(['/', '\\']), path: false});
+  }
+  const mirrors = grid.map((t, i) => t.path && t.m ? i : -1).filter(i => i >= 0);
+  shuffle(mirrors).slice(0, Math.max(2, Math.ceil(mirrors.length * 0.6))).forEach(i => grid[i].m = grid[i].m === '/' ? '\\' : '/');
+  const st = {grid, r0, r1: path[path.length - 1].y, W, H, solved: false, flips: 0};
+  if (lensSolved(st)) { const i = mirrors[0]; if (i != null) grid[i].m = grid[i].m === '/' ? '\\' : '/'; }
+  return st;
+}
+function lensBeam(st) {
+  const {W, H, grid} = st, lit = [];
+  let x = 0, y = st.r0, dir = 1;
+  for (let g = 0; g < 40; g++) {
+    if (x < 0 || x >= W || y < 0 || y >= H) return {lit, out: {x, y, dir}};
+    lit.push(y * W + x);
+    const t = grid[y * W + x];
+    if (t.m) dir = LENS_TURN[t.m][dir];
+    if (dir === 0) y--; else if (dir === 2) y++; else if (dir === 1) x++; else x--;
+  }
+  return {lit, out: null};
+}
+const lensSolved = st => { const o = lensBeam(st).out; return !!o && o.x === st.W && o.y === st.r1; };
+
+// signal: the lamp flashes a sequence of six colours; key it back in, one colour per step
+const SIGNAL_COLS = ['#e8433b', '#4fbf6b', '#f2efe4', '#e8b23b'];
+const SIGNAL_NAMES = ['Red', 'Green', 'White', 'Amber'];
+const makeSignal = () => ({seq: Array.from({length: 6}, () => rnd(4)), prog: 0, solved: false});
 function pipesSolved(st) {
   const {W, H, grid} = st;
   let x = 0, y = st.r0, from = 3;
@@ -220,6 +278,8 @@ const slideSolved = grid => !grid.some(r => r.includes('K'));
 function afterAction(D, kind) {
   const inv = D.active >= 0 ? D.inv[D.active] : null;
   if (inv && !['move', 'extinguish', 'start', 'endturn', 'endphase'].includes(kind) && fireAt(D, inv.space)) hurt(D, inv, 1, 'acting in the flames');
+  // Chapter 2: acting while Submerged costs an Agility test (need 1) or 1 Damage (Nell is at home in the water)
+  if (inv && !inv.out && !['move', 'start', 'endturn', 'endphase', 'tidetables'].includes(kind) && waterAt(D, inv.space) >= 2 && inv.id !== 'nell' && autoTest(D, inv, 'agi') < 1) hurt(D, inv, 1, 'the cold, dragging water');
   if (D.active >= 0) { const a = D.inv[D.active]; if (a.out || (D.actions <= 0 && D.moveLeft <= 0)) { D.done[D.active] = true; D.active = -1; D.moveLeft = 0; } }
   if (kind === 'endturn' && D.active >= 0) { D.done[D.active] = true; D.active = -1; }
 }
